@@ -56,12 +56,37 @@ class Settings(BaseSettings):
     # ── Redis ─────────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
 
-    # ── LLM APIs (Phase 3) ────────────────────────────────────────────────────
-    anthropic_api_key: str | None = None
-    openai_api_key: str | None = None
+    # ── LLM (Phase 3) ─────────────────────────────────────────────────────────
+    # Default: Ollama running locally — free, no API key required.
+    # Switch providers by changing only these three vars:
+    #   Groq free tier:  base_url=https://api.groq.com/openai/v1, model=llama-3.3-70b-versatile, api_key=<groq key>
+    #   OpenRouter:      base_url=https://openrouter.ai/api/v1, model=meta-llama/llama-3.2-3b-instruct:free, api_key=<key>
+    #   LM Studio:       base_url=http://localhost:1234/v1, model=<loaded model>, api_key=lm-studio
+    llm_base_url: str = "http://ollama:11434/v1"
+    llm_model: str = "qwen2.5:0.5b"
+    llm_api_key: str = "ollama"  # Ollama ignores this; set to real key for Groq/OpenRouter
 
     # ── Biomedical APIs (Phase 2) ─────────────────────────────────────────────
+    # NCBI PubMed API key — free at https://www.ncbi.nlm.nih.gov/account/
+    # Without key: 3 req/s rate limit. With key: 10 req/s.
     pubmed_api_key: str | None = None
+
+    # ── Collector settings (Phase 2) ──────────────────────────────────────────
+    # Default max documents to collect per source per run.
+    # Increase after Phase 3 agents can process documents faster than they arrive.
+    collector_max_results: int = 100
+
+    # ── Newsletter / SMTP ─────────────────────────────────────────────────────
+    # Leave smtp_host empty to disable email sending (subscribe still works,
+    # emails just won't be delivered). Gmail example:
+    #   SMTP_HOST=smtp.gmail.com  SMTP_PORT=587
+    #   SMTP_USER=you@gmail.com   SMTP_PASSWORD=<16-char app password>
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "PathogenIQ <noreply@pathogeniq.io>"
+    frontend_base_url: str = "http://localhost:3000"
 
     @property
     def is_production(self) -> bool:

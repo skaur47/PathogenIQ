@@ -67,7 +67,14 @@ class Document(UUIDMixin, TimestampMixin, Base):
 
     # ── Identification ────────────────────────────────────────────────────────
     source: Mapped[DocumentSource] = mapped_column(
-        Enum(DocumentSource, name="document_source_enum"), nullable=False
+        Enum(
+            DocumentSource,
+            name="document_source_enum",
+            native_enum=False,
+            create_constraint=False,
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
+        nullable=False,
     )
     external_id: Mapped[str] = mapped_column(String(512), nullable=False)
 
@@ -83,7 +90,13 @@ class Document(UUIDMixin, TimestampMixin, Base):
 
     # ── Processing ────────────────────────────────────────────────────────────
     status: Mapped[DocumentStatus] = mapped_column(
-        Enum(DocumentStatus, name="document_status_enum"),
+        Enum(
+            DocumentStatus,
+            name="document_status_enum",
+            native_enum=False,
+            create_constraint=False,
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
         default=DocumentStatus.PENDING,
         nullable=False,
     )

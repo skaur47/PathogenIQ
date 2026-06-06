@@ -68,21 +68,8 @@ class Outbreak(UUIDMixin, TimestampMixin, Base):
         ForeignKey("pathogens.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    location_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("locations.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
 
-    # ── Relationships ─────────────────────────────────────────────────────────
-    pathogen: Mapped["Pathogen"] = relationship("Pathogen", back_populates="outbreaks")  # noqa: F821
-    location: Mapped["Location"] = relationship("Location", back_populates="outbreaks")  # noqa: F821
-    evidence_scores: Mapped[list["EvidenceScore"]] = relationship(  # noqa: F821
-        "EvidenceScore", back_populates="outbreak", cascade="all, delete-orphan"
-    )
-    alerts: Mapped[list["Alert"]] = relationship(  # noqa: F821
-        "Alert", back_populates="outbreak", cascade="all, delete-orphan"
-    )
+    pathogen: Mapped["Pathogen"] = relationship("Pathogen", back_populates="outbreaks", lazy="raise")
 
     # ── Timeline ──────────────────────────────────────────────────────────────
     detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -119,7 +106,6 @@ class Outbreak(UUIDMixin, TimestampMixin, Base):
 
     __table_args__ = (
         Index("ix_outbreaks_pathogen_id", "pathogen_id"),
-        Index("ix_outbreaks_location_id", "location_id"),
         Index("ix_outbreaks_status", "status"),
         Index("ix_outbreaks_risk_level", "risk_level"),
         Index("ix_outbreaks_detected_at", "detected_at"),

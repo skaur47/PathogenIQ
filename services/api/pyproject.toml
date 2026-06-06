@@ -41,6 +41,29 @@ dependencies = [
     "neo4j>=5.28.0",
     "qdrant-client>=1.13.3",
     "redis[hiredis]>=5.2.1",
+    # Phase 2 — data ingestion
+    # arq: async Redis Queue — background tasks and cron scheduling without
+    #   the overhead of Celery. Uses Redis (already in our stack) as the broker.
+    "arq>=0.26.1",
+    # feedparser: battle-tested RSS/Atom feed parser used for CDC and WHO feeds.
+    #   We fetch the raw XML with httpx (async) then parse with feedparser (sync, fast).
+    "feedparser>=6.0.11",
+    # trafilatura: main-content extractor for news and health authority article pages.
+    #   Strips navigation, ads, and boilerplate; returns clean body text. Used by
+    #   collectors/fetch.py to enrich documents with full article text beyond the RSS summary.
+    "trafilatura>=1.9.0",
+    # Phase 3 — AI agents
+    # langgraph: state-machine framework for multi-step LLM agent workflows.
+    #   Provides the StateGraph primitive used by Sentinel and Scholar agents.
+    "langgraph>=0.2.0",
+    # langchain-openai: LangChain binding for any OpenAI-compatible API.
+    #   Used by get_llm() in agents/llm.py. Works with Ollama (free, local),
+    #   Groq free tier, LM Studio, OpenRouter, or the real OpenAI API —
+    #   controlled entirely by LLM_BASE_URL / LLM_MODEL / LLM_API_KEY env vars.
+    "langchain-openai>=0.3.0",
+    # langchain-core: base abstractions (messages, runnables) shared across
+    #   LangChain/LangGraph integrations. Required transitive dep of the above.
+    "langchain-core>=0.3.0",
 ]
 
 [project.optional-dependencies]

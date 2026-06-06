@@ -1,7 +1,7 @@
 import uuid
 from typing import Sequence
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.db.models.document import Document, DocumentSource, DocumentStatus
 from app.db.session import AsyncSession
@@ -88,3 +88,10 @@ class DocumentRepository(BaseRepository[Document]):
             .offset(offset)
         )
         return result.scalars().all()
+
+    async def count_by_source(self, source: DocumentSource) -> int:
+        """Count documents from a specific source. Used for paginated list totals."""
+        result = await self._session.execute(
+            select(func.count()).select_from(Document).where(Document.source == source)
+        )
+        return result.scalar_one()

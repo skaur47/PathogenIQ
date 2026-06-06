@@ -33,8 +33,6 @@ class OutbreakRepository(BaseRepository[Outbreak]):
             .where(Outbreak.id == outbreak_id)
             .options(
                 selectinload(Outbreak.pathogen),
-                selectinload(Outbreak.location),
-                selectinload(Outbreak.evidence_scores),
             )
         )
         return result.scalar_one_or_none()
@@ -55,7 +53,6 @@ class OutbreakRepository(BaseRepository[Outbreak]):
             .where(Outbreak.status.in_(active_statuses))
             .options(
                 selectinload(Outbreak.pathogen),
-                selectinload(Outbreak.location),
             )
             .order_by(Outbreak.risk_score.desc().nulls_last())
             .limit(limit)
@@ -83,24 +80,9 @@ class OutbreakRepository(BaseRepository[Outbreak]):
         )
         return result.scalars().all()
 
-    async def get_critical_unalerted(self) -> Sequence[Outbreak]:
-        """
-        Find CRITICAL outbreaks that have no acknowledged alert.
-        Used by the Alert Agent to trigger notifications.
-        Requires a JOIN, so we use a subquery approach.
-        """
-        from app.db.models.evidence import Alert
-        from sqlalchemy import exists
-
-        has_ack_alert = exists().where(
-            Alert.outbreak_id == Outbreak.id,
-            Alert.acknowledged.is_(True),
-        )
+    async def get_critical(self) -> Sequence[Outbreak]:
+        """Return all CRITICAL-risk outbreaks."""
         result = await self._session.execute(
-            select(Outbreak)
-            .where(
-                Outbreak.risk_level == RiskLevel.CRITICAL,
-                ~has_ack_alert,
-            )
+            select(Outbreak).where(Outbreak.risk_level == RiskLevel.CRITICAL)
         )
         return result.scalars().all()

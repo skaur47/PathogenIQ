@@ -49,7 +49,7 @@ class Pathogen(UUIDMixin, TimestampMixin, Base):
     species_name: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
     common_name: Mapped[str | None] = mapped_column(String(512))
     category: Mapped[PathogenCategory] = mapped_column(
-        Enum(PathogenCategory, name="pathogen_category_enum"),
+        Enum(PathogenCategory, name="pathogen_category_enum", native_enum=False),
         default=PathogenCategory.UNKNOWN,
         nullable=False,
     )
@@ -64,11 +64,6 @@ class Pathogen(UUIDMixin, TimestampMixin, Base):
     transmission_routes: Mapped[list | None] = mapped_column(JSONB)  # ["airborne", "droplet"]
     reservoir_hosts: Mapped[list | None] = mapped_column(JSONB)     # ["bats", "rodents"]
     who_priority: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # ── Risk assessment ───────────────────────────────────────────────────────
-    # Pandemic potential score: 0.0–1.0, set by Mechanica Agent
-    # based on transmissibility, severity, and immune escape potential
-    pandemic_potential_score: Mapped[float | None] = mapped_column(Float)
 
     # ── Relationships ─────────────────────────────────────────────────────────
     outbreaks: Mapped[list["Outbreak"]] = relationship(  # noqa: F821

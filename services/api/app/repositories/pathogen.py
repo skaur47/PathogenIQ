@@ -35,7 +35,13 @@ class PathogenRepository(BaseRepository[Pathogen]):
         result = await self._session.execute(
             select(Pathogen)
             .where(Pathogen.who_priority.is_(True))
-            .order_by(Pathogen.pandemic_potential_score.desc().nulls_last())
+            .order_by(Pathogen.species_name)
+        )
+        return result.scalars().all()
+
+    async def get_all(self, limit: int = 1000, offset: int = 0) -> Sequence[Pathogen]:
+        result = await self._session.execute(
+            select(Pathogen).order_by(Pathogen.species_name).limit(limit).offset(offset)
         )
         return result.scalars().all()
 

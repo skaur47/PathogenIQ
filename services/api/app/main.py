@@ -20,25 +20,48 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Application lifespan manager.
 
     Why lifespan instead of @app.on_event("startup")?
-      - @app.on_event is deprecated in FastAPI 0.93+
+      - @app.on_event is deprecated in FastAPI 0.93+.
       - lifespan uses a context manager: code before `yield` runs on startup,
         code after `yield` runs on shutdown. This is cleaner and testable.
 
-    Everything before `yield` must succeed or the app refuses to start.
-    This is intentional — if we can't reach the database, there's nothing
-    useful the API can do, so we fail fast and let Docker/k8s restart us.
+    Everything before `yield` must succeed or the app refuses to start —
+    except the ARQ pool, which is optional. If Redis is down, the API still
+    serves documents and health checks; only the ingestion trigger endpoints
+    will return 503 until Redis comes back.
     """
-    # ── Startup ──────────────────────────────────────────────────────────────
+    # ── Startup ───────────────────────────────────────────────────────────────
     configure_logging()
     logger.info("pathogeniq_starting", environment=settings.environment)
 
     await init_db()
+
+    # Initialise ARQ Redis pool (Phase 2).
+    # Stored on app.state so ingestion endpoints can enqueue jobs.
+    # We do NOT fail startup if Redis is unavailable — the API remains useful
+    # for read-only operations (documents, health). Ingestion endpoints will
+    # return 503 and the health endpoint will report Redis as "unreachable".
+    try:
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        app.state.arq_redis = await create_pool(
+            RedisSettings.from_dsn(settings.redis_url)
+        )
+        logger.info("arq_pool_connected", redis_url=settings.redis_url)
+    except Exception as exc:
+        logger.warning("arq_pool_unavailable", error=str(exc))
+        app.state.arq_redis = None
 
     logger.info("pathogeniq_ready", host="0.0.0.0", port=8000)
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     logger.info("pathogeniq_shutting_down")
+
+    if getattr(app.state, "arq_redis", None) is not None:
+        await app.state.arq_redis.aclose()
+        logger.info("arq_pool_closed")
+
     await close_db()
     logger.info("pathogeniq_stopped")
 
@@ -53,7 +76,7 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(
         title=settings.app_name,
-        version="0.1.0",
+        version="0.2.0",
         description=(
             "Real-time infectious disease intelligence and therapeutic discovery platform. "
             "All AI-generated outputs require expert review before clinical application."

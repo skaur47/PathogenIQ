@@ -94,6 +94,32 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Ollama ────────────────────────────────────────────────────────────────
+  # Local LLM server — free, no API key, OpenAI-compatible API at :11434/v1.
+  # Agents use this by default. Switch to Groq/OpenRouter by overriding
+  # LLM_BASE_URL, LLM_MODEL, LLM_API_KEY in .env without touching the code.
+  #
+  # First run: pull a model inside the container:
+  #   docker compose exec ollama ollama pull llama3.2
+  # Or let setup.sh do it automatically.
+  #
+  # GPU acceleration (optional): add `deploy: resources: reservations: devices:`
+  # with driver=nvidia and capabilities=[gpu] if you have an NVIDIA GPU.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: pathogeniq_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   # ── API (FastAPI) ─────────────────────────────────────────────────────────
   # Main application. Hot-reload enabled in development via volume mount.
   api:
@@ -113,6 +139,8 @@ services:
       NEO4J_PASSWORD: pathogeniq_secret
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379/0
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_MODEL: qwen2.5:0.5b
     depends_on:
       postgres:
         condition: service_healthy
@@ -122,9 +150,54 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
     volumes:
       - ./services/api:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  # ── Worker (ARQ) ──────────────────────────────────────────────────────────
+  # Background task worker that runs data collection on a schedule.
+  #
+  # Same Docker image as the API — we reuse the same codebase, just with
+  # a different entrypoint. This avoids maintaining a separate Dockerfile.
+  #
+  # WHY A SEPARATE SERVICE?
+  #   - The API handles HTTP requests (latency-sensitive, short-lived).
+  #   - The worker runs long data collection jobs (1–60 seconds, CPU+IO bound).
+  #   - Separating them means a slow collection job never blocks an API request.
+  #   - In production (Phase 6), you can scale workers independently:
+  #     docker compose up --scale worker=3 (three parallel workers)
+  #
+  # The worker has NO exposed ports — it only talks to Redis and PostgreSQL.
+  worker:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+      target: development
+    container_name: pathogeniq_worker
+    command: arq app.workers.settings.WorkerSettings
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pathogeniq:pathogeniq_secret@postgres:5432/pathogeniq
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: pathogeniq_secret
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_MODEL: qwen2.5:0.5b
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./services/api:/app
     restart: unless-stopped
 
 volumes:
@@ -133,3 +206,4 @@ volumes:
   neo4j_logs:
   qdrant_data:
   redis_data:
+  ollama_data:
