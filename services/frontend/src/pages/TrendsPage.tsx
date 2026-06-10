@@ -273,7 +273,7 @@ export function TrendsPage() {
           <div>
             <h1 className="text-3xl font-bold text-white mb-1">Pathogen Trends</h1>
             <p className="text-sm text-slate-400">
-              Daily document mentions per pathogen as the surveillance pipeline ingests new data.
+              New documents published per pathogen per day, grouped by article publication date.
             </p>
           </div>
 

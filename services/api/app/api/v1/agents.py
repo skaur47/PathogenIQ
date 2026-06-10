@@ -613,6 +613,32 @@ async def trigger_verify_hypothesis(request: Request) -> AgentTriggerResponse:
     )
 
 
+@router.post(
+    "/trigger/send-newsletter",
+    response_model=AgentTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Send daily digest now",
+    description="Immediately enqueue the newsletter digest task for all active subscribers.",
+)
+async def trigger_send_newsletter(request: Request) -> AgentTriggerResponse:
+    arq_redis = _get_arq_redis(request)
+    job = await arq_redis.enqueue_job("task_send_newsletter")
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enqueue newsletter job.",
+        )
+    logger.info("newsletter_triggered", job_id=job.job_id)
+    return AgentTriggerResponse(
+        job_id=job.job_id,
+        agent="newsletter",
+        message=(
+            "Newsletter digest queued. Emails will be sent to all active subscribers. "
+            f"Poll GET /api/v1/ingestion/jobs/{job.job_id} for status."
+        ),
+    )
+
+
 # ── Hypothesis query endpoints ────────────────────────────────────────────────
 
 @router.get(
@@ -924,44 +950,62 @@ class PathogenTrendsOut(BaseModel):
 @router.get(
     "/pathogen-trends",
     response_model=PathogenTrendsOut,
-    summary="Daily pathogen mention counts",
+    summary="Daily pathogen document counts by publication date",
     description=(
         "For each day in the requested window, returns how many documents "
-        "mentioning each pathogen were ingested by the pipeline. "
+        "mentioning each pathogen were published on that day. "
+        "Uses published_date (not ingestion date) so batch pipeline runs don't "
+        "collapse all articles onto a single spike. "
         "Use ?days= to control the window (7–90, default 30)."
     ),
 )
 async def get_pathogen_trends(
     days: int = Query(default=30, ge=7, le=90),
 ) -> PathogenTrendsOut:
+    from email.utils import parsedate_to_datetime
+
     today = date.today()
     cutoff = today - timedelta(days=days - 1)
 
+    # Fetch raw rows — no SQL date filter because published_date is a free-form
+    # string that can't be compared in SQL. Python handles the window filter below.
+    # Use a loose created_at guard (cutoff - 180 days) to avoid full-table scans
+    # on large datasets while still catching documents ingested before the window
+    # that were published within it.
+    loose_cutoff = cutoff - timedelta(days=180)
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(
-                func.date(Document.created_at).label("day"),
+                Document.published_date,
+                Document.created_at,
                 PathogenMention.pathogen_name,
-                func.count().label("doc_count"),
             )
             .join(Document, PathogenMention.document_id == Document.id)
-            .where(Document.created_at >= cutoff)
-            .group_by(func.date(Document.created_at), PathogenMention.pathogen_name)
-            .order_by(func.date(Document.created_at))
+            .where(Document.created_at >= loose_cutoff)
         )
         rows = result.all()
+
+    # Accumulate counts per (pathogen_name, day) using published_date where
+    # available (RFC 2822 strings); fall back to created_at date.
+    data: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for row in rows:
+        pub_day: date | None = None
+        if row.published_date:
+            try:
+                pub_day = parsedate_to_datetime(row.published_date).date()
+            except Exception:
+                pass
+        if pub_day is None and row.created_at:
+            pub_day = row.created_at.date()
+        if pub_day is None or not (cutoff <= pub_day <= today):
+            continue
+        data[str(row.pathogen_name)][pub_day.isoformat()] += 1
 
     # Build a dense date range (every day from cutoff → today)
     day_range = [
         (cutoff + timedelta(days=i)).isoformat()
         for i in range((today - cutoff).days + 1)
     ]
-
-    # Accumulate counts per (pathogen_name, day)
-    data: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for row in rows:
-        day_str = row.day.isoformat() if hasattr(row.day, "isoformat") else str(row.day)
-        data[str(row.pathogen_name)][day_str] = int(row.doc_count)
 
     # Emit only pathogens that have at least one non-zero day in the window
     series = [

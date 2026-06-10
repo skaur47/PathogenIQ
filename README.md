@@ -155,12 +155,12 @@ PathogenIQ/
 └── .env.example
 ```
 
-## Quick Start
+## Quick Start (local)
 
 ```bash
 # 1. Configure environment
 cp .env.example .env
-# Edit .env — set ANTHROPIC_API_KEY at minimum
+# Edit .env — set LLM_API_KEY (Groq) or leave Ollama defaults
 
 # 2. Start the full stack (API, worker, Postgres, Neo4j, Qdrant, Redis, Ollama)
 docker compose up
@@ -178,6 +178,100 @@ open http://localhost:3000
 # 6. Run tests
 cd services/api && pytest -v
 ```
+
+## Production Deployment (free tier)
+
+The pipeline requires an always-on background worker for cron jobs. Below is the recommended free-tier stack:
+
+| Service | Provider | Free tier |
+|---|---|---|
+| API + Worker (2 VMs) | [Fly.io](https://fly.io) | 3 shared VMs, 256 MB each |
+| PostgreSQL | [Neon](https://neon.tech) | 512 MB, 1 compute unit |
+| Redis | [Upstash](https://upstash.com) | 10 000 req/day |
+| Neo4j | [Neo4j Aura Free](https://neo4j.com/cloud/aura-free/) | 200 MB |
+| Vector DB | [Qdrant Cloud](https://qdrant.tech/cloud/) | 1 GB |
+| LLM | [Groq](https://console.groq.com) | 14 400 req/day |
+| Frontend | [Vercel](https://vercel.com) | Unlimited static |
+
+### Step 1 — Sign up for free services
+
+Create accounts at each provider above. You only need the connection strings / API keys they give you.
+
+### Step 2 — Deploy the API + worker to Fly.io
+
+```bash
+# Install the Fly CLI
+brew install flyctl   # or: curl -L https://fly.io/install.sh | sh
+
+# Log in and create the app (run from services/api/)
+cd services/api
+fly auth login
+fly launch --name pathogeniq-api --no-deploy   # creates fly.toml, skip auto-deploy
+
+# Set all secrets (replace values with your real connection strings)
+fly secrets set \
+  DATABASE_URL="postgresql+asyncpg://user:pass@host/db" \
+  REDIS_URL="rediss://default:pass@host:6379" \
+  NEO4J_URI="neo4j+s://xxxx.databases.neo4j.io" \
+  NEO4J_PASSWORD="your-neo4j-password" \
+  QDRANT_URL="https://xxxx.us-east-1-0.aws.cloud.qdrant.io" \
+  QDRANT_API_KEY="your-qdrant-key" \
+  LLM_BASE_URL="https://api.groq.com/openai/v1" \
+  LLM_MODEL="llama-3.3-70b-versatile" \
+  LLM_API_KEY="your-groq-key" \
+  CORS_ORIGINS="https://your-app.vercel.app" \
+  ENVIRONMENT="production"
+
+# Deploy — this starts both the "api" and "worker" process groups
+fly deploy
+
+# Run migrations once after first deploy
+fly ssh console -C "alembic upgrade head"
+```
+
+The `fly.toml` in `services/api/` already defines two process groups:
+- `api` — uvicorn HTTP server, bound to port 8000
+- `worker` — ARQ background worker, runs all cron jobs 24/7
+
+### Step 3 — Deploy the frontend to Vercel
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy from services/frontend/
+cd services/frontend
+vercel --prod
+
+# When Vercel asks for project settings:
+#   Framework: Vite
+#   Root: services/frontend
+#   Build command: npm run build
+#   Output dir: dist
+```
+
+After deploy, go to **Vercel → Project → Settings → Environment Variables** and add:
+
+```
+VITE_API_BASE_URL = https://pathogeniq-api.fly.dev
+```
+
+Then redeploy once (`vercel --prod`) so the frontend picks up the new variable.
+
+### Step 4 — Verify it's running
+
+```bash
+# Check API health
+curl https://pathogeniq-api.fly.dev/health
+
+# Check pipeline status
+curl https://pathogeniq-api.fly.dev/api/v1/agents/pipeline-status
+
+# Tail worker logs to confirm cron jobs fire
+fly logs --app pathogeniq-api
+```
+
+The worker will automatically collect new documents every 4-6 hours and run the full AI pipeline at 02:00 UTC every night — without your laptop needing to be on.
 
 ## Agents
 

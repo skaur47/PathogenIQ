@@ -142,17 +142,14 @@ class WorkerSettings:
 
     # ── Cron schedule ─────────────────────────────────────────────────────────
     # cron(func, hour={...}, minute=N) means: run at those hours:minute, UTC.
+    # Collection and pipeline crons disabled — trigger manually via API endpoints.
+    # Re-enable by uncommenting when ready for automatic operation.
     cron_jobs = [
-        # Intra-day collection — feed new documents into the DB throughout the day
-        cron(task_collect_promed, hour={0, 6, 12, 18}, minute=2),
-        cron(task_collect_cdc,    hour={0, 4, 8, 12, 16, 20}, minute=5),
-        cron(task_collect_who,    hour={0, 4, 8, 12, 16, 20}, minute=10),
-        cron(task_collect_news,   hour={0, 4, 8, 12, 16, 20}, minute=15),
-        # Full pipeline — runs every night at 02:00 UTC (quiet hours)
-        # Processes everything collected during the day: Sentinel → Scholar →
-        # Dedup → Research → Hypothesis → Graph Sync.
-        cron(task_run_full_pipeline, hour=2, minute=0),
-        # Daily digest — sent every morning at 08:00 UTC, after the pipeline completes.
+        # cron(task_collect_promed, hour={0, 6, 12, 18}, minute=2),
+        # cron(task_collect_cdc,    hour={0, 4, 8, 12, 16, 20}, minute=5),
+        # cron(task_collect_who,    hour={0, 4, 8, 12, 16, 20}, minute=10),
+        # cron(task_collect_news,   hour={0, 4, 8, 12, 16, 20}, minute=15),
+        # cron(task_run_full_pipeline, hour=2, minute=0),
         cron(task_send_newsletter, hour=8, minute=0),
     ]
 

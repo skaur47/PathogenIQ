@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     # Increase after Phase 3 agents can process documents faster than they arrive.
     collector_max_results: int = 100
 
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    # In development: "*" is used unconditionally (see main.py).
+    # In production: set CORS_ORIGINS to a comma-separated list of allowed origins,
+    # e.g. CORS_ORIGINS=https://pathogeniq.vercel.app,https://pathogeniq.io
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000", "http://localhost:5173"]
+    )
+
     # ── Newsletter / SMTP ─────────────────────────────────────────────────────
     # Leave smtp_host empty to disable email sending (subscribe still works,
     # emails just won't be delivered). Gmail example:

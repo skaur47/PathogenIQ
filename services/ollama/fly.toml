@@ -1,0 +1,22 @@
+app = "pathogeniq-ollama"
+primary_region = "iad"
+
+[build]
+  image = "ollama/ollama"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "1gb"
+
+# Ollama HTTP API — not exposed publicly, only reachable by other Fly apps
+# on the private network via pathogeniq-ollama.internal:11434
+[http_service]
+  internal_port        = 11434
+  force_https          = false
+  auto_stop_machines   = false
+  min_machines_running = 1
+
+[[mounts]]
+  source      = "ollama_data"
+  destination = "/root/.ollama"
