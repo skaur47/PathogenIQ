@@ -40,7 +40,10 @@ import asyncio
 import structlog
 from arq.jobs import Job, JobStatus
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel
 
+from app.db.session import AsyncSessionLocal
+from app.repositories.document import DocumentRepository
 from app.schemas.ingestion import JobStatusResponse, TriggerRequest, TriggerResponse
 
 logger = structlog.get_logger(__name__)
@@ -72,6 +75,29 @@ def _get_arq_redis(request: Request):
             ),
         )
     return arq_redis
+
+
+class ResetResponse(BaseModel):
+    reset_count: int
+    message: str
+
+
+@router.post(
+    "/reset-pending",
+    response_model=ResetResponse,
+    summary="Reset all documents to PENDING",
+    description="Resets every document back to PENDING so Sentinel will reprocess all of them on the next run.",
+)
+async def reset_documents_to_pending() -> ResetResponse:
+    async with AsyncSessionLocal() as session:
+        repo = DocumentRepository(session)
+        count = await repo.reset_all_to_pending()
+        await session.commit()
+    logger.info("documents_reset_to_pending", count=count)
+    return ResetResponse(
+        reset_count=count,
+        message=f"Reset {count} documents to PENDING. Now trigger Sentinel to reprocess all.",
+    )
 
 
 @router.post(

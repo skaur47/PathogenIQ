@@ -76,6 +76,17 @@ class DocumentRepository(BaseRepository[Document]):
         )
         await self._session.flush()
 
+    async def reset_all_to_pending(self) -> int:
+        """Reset all non-PENDING documents back to PENDING so Sentinel reprocesses them."""
+        result = await self._session.execute(
+            update(Document)
+            .where(Document.status != DocumentStatus.PENDING)
+            .values(status=DocumentStatus.PENDING)
+            .returning(Document.id)
+        )
+        await self._session.flush()
+        return len(result.fetchall())
+
     async def get_by_source(
         self, source: DocumentSource, limit: int = 100, offset: int = 0
     ) -> Sequence[Document]:
