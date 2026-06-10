@@ -4,9 +4,8 @@ services:
     runtime: docker
     dockerfilePath: services/api/Dockerfile
     dockerContext: services/api
-    dockerTargetStage: production
     plan: free
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health/live
     envVars:
       - key: ENVIRONMENT
         value: production
