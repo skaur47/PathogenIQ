@@ -36,6 +36,7 @@ PROFILE PERSISTENCE:
   are inserted. Scholar never deletes pathogen records.
 """
 
+import asyncio
 import json
 import re
 from typing import TypedDict
@@ -136,7 +137,9 @@ async def research_pathogens(state: ScholarState) -> ScholarState:
     error_count = state["error_count"]
     saved_count = state["saved_count"]
 
-    for pathogen_name in state["target_pathogens"]:
+    for i, pathogen_name in enumerate(state["target_pathogens"]):
+        if i > 0:
+            await asyncio.sleep(20)  # 20s between pathogens to avoid Groq TPM rate limit
         try:
             papers = await _fetch_pubmed_papers(pubmed, pathogen_name)
             profile = await _synthesize_profile(llm, pathogen_name, papers)

@@ -152,7 +152,9 @@ async def synthesize_each(state: HypothesisState) -> HypothesisState:
     hypotheses_saved = state["hypotheses_saved"]
     errors = list(state["errors"])
 
-    for pathogen in state["pathogens"]:
+    for i, pathogen in enumerate(state["pathogens"]):
+        if i > 0:
+            await asyncio.sleep(20)  # 20s between pathogens to avoid Groq TPM rate limit
         name = pathogen.species_name
         log = logger.bind(pathogen=name)
         log.info("hypothesis_start")

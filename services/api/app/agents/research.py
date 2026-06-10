@@ -57,7 +57,7 @@ _YEARS = '"2022"[dp] OR "2023"[dp] OR "2024"[dp] OR "2025"[dp] OR "2026"[dp]'
 # Concurrency limits
 _PUBMED_CONCURRENCY = 1   # single NCBI slot; 0.35s hold keeps us under 3 req/s
 _LLM_CONCURRENCY = 8      # max simultaneous LLM synthesis calls
-_PATHOGEN_CONCURRENCY = 3 # max pathogens processed at the same time
+_PATHOGEN_CONCURRENCY = 1 # sequential to avoid Groq TPM rate limit
 
 # Module-level semaphore — shared across ALL concurrent research job invocations.
 # If two ARQ jobs happen to run simultaneously they still share one NCBI slot.
@@ -253,14 +253,12 @@ async def research_each(state: ResearchState) -> ResearchState:
     pubmed_sem, llm_sem = _get_sems()
     pathogen_sem = asyncio.Semaphore(_PATHOGEN_CONCURRENCY)
 
-    async def bounded_pathogen(pathogen: Pathogen):
-        async with pathogen_sem:
-            return await _run_one_pathogen(pubmed, llm, pathogen, pubmed_sem, llm_sem)
-
-    results = await asyncio.gather(
-        *[bounded_pathogen(p) for p in state["pathogens"]],
-        return_exceptions=True,
-    )
+    results = []
+    for i, pathogen in enumerate(state["pathogens"]):
+        if i > 0:
+            await asyncio.sleep(20)  # 20s between pathogens to avoid Groq TPM rate limit
+        result = await _run_one_pathogen(pubmed, llm, pathogen, pubmed_sem, llm_sem)
+        results.append(result)
 
     pathogens_researched = state["pathogens_researched"]
     articles_saved = state["articles_saved"]
