@@ -48,8 +48,8 @@ from .validators import normalize_pathogen_name
 
 logger = structlog.get_logger(__name__)
 
-BATCH_SIZE = 1          # one doc per call — required for CPU-only qwen inference
-MAX_DOCS_PER_RUN = 2    # 2 docs × ~90s each ≈ 3 min; run pipeline repeatedly to drain queue
+BATCH_SIZE = 5          # 5 docs per call — Groq is fast enough to handle batches
+MAX_DOCS_PER_RUN = 100  # process up to 100 docs per run on Groq
 
 
 # ── LangGraph state ───────────────────────────────────────────────────────────
