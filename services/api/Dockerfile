@@ -73,9 +73,14 @@ COPY . .
 # Non-root user for security (never run production containers as root)
 RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
+
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 USER appuser
 
 EXPOSE 8000
 
-# No --reload in production; run multiple workers with gunicorn in Phase 6
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Starts both the API (uvicorn) and the ARQ worker in one container.
+# The worker handles background pipeline jobs enqueued via the API.
+CMD ["/app/start.sh"]
