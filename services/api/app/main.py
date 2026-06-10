@@ -2,8 +2,9 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.core.logging import configure_logging
@@ -102,6 +103,21 @@ def create_app() -> FastAPI:
 
     # ── Routes ────────────────────────────────────────────────────────────────
     app.include_router(api_router)
+
+    # ── CORS-safe error handler ───────────────────────────────────────────────
+    # Unhandled exceptions bypass the CORS middleware and return responses with
+    # no Access-Control-Allow-Origin header, causing the browser to show a CORS
+    # error instead of the real 500. This handler ensures the header is present.
+    allowed = ["*"] if settings.is_development else [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        origin = request.headers.get("origin", "")
+        headers = {}
+        if "*" in allowed or origin in allowed:
+            headers["Access-Control-Allow-Origin"] = origin or "*"
+        logger.error("unhandled_exception", path=request.url.path, error=str(exc))
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"}, headers=headers)
 
     return app
 
