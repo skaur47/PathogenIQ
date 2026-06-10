@@ -94,7 +94,7 @@ def create_app() -> FastAPI:
     # actual domain (e.g., "https://pathogeniq.yourdomain.com").
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.is_development else settings.cors_origins,
+        allow_origins=["*"] if settings.is_development else [o.strip() for o in settings.cors_origins.split(",") if o.strip()],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],

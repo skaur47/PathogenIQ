@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -80,16 +80,9 @@ class Settings(BaseSettings):
     # In development: "*" is used unconditionally (see main.py).
     # In production: set CORS_ORIGINS to a comma-separated list of allowed origins,
     # e.g. CORS_ORIGINS=https://pathogeniq.vercel.app,https://pathogeniq.io
-    cors_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:5173"
     )
-
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: object) -> object:
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
 
     # ── Newsletter / SMTP ─────────────────────────────────────────────────────
     # Leave smtp_host empty to disable email sending (subscribe still works,
