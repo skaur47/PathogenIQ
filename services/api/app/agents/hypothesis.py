@@ -46,7 +46,7 @@ from .llm import get_llm
 
 logger = structlog.get_logger(__name__)
 
-MAX_PATHOGENS_PER_RUN = 1  # 5 LLM calls per pathogen — 1 is enough per run on CPU inference
+MAX_PATHOGENS_PER_RUN = 50  # process all pathogens per run on Groq
 
 
 # ── LangGraph state ───────────────────────────────────────────────────────────

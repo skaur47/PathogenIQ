@@ -60,7 +60,7 @@ logger = structlog.get_logger(__name__)
 
 MIN_MENTION_THRESHOLD = 1
 MAX_ABSTRACTS = 8          # 8 abstracts gives richer evidence for accurate field synthesis
-MAX_PATHOGENS_PER_RUN = 1  # one pathogen per pass — keeps each pass short on CPU inference
+MAX_PATHOGENS_PER_RUN = 50  # process all pathogens per run on Groq
 _ABSTRACT_CHARS = 600      # chars per abstract in the synthesis prompt
 
 # English function words that appear in descriptive phrases but not scientific names

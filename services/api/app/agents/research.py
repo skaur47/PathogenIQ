@@ -50,7 +50,7 @@ logger = structlog.get_logger(__name__)
 
 ARTICLES_PER_QUERY = 2     # 2×8 queries = up to 16 articles per pathogen (was 3×13=39)
 _ABSTRACT_CHARS = 200      # truncate abstracts to keep LLM prompt small (was 400)
-_MAX_PATHOGENS_PER_RUN = 1 # one pathogen per pass — keeps each pass short on CPU inference
+_MAX_PATHOGENS_PER_RUN = 50 # process all pathogens per run on Groq
 
 _YEARS = '"2022"[dp] OR "2023"[dp] OR "2024"[dp] OR "2025"[dp] OR "2026"[dp]'
 
