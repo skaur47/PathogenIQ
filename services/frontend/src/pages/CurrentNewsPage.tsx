@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ExternalLink, Clock, AlertCircle } from 'lucide-react'
+import { ExternalLink, AlertCircle } from 'lucide-react'
 import { api } from '../api/client'
-import type { DocumentItem, PipelineStatus } from '../types'
+import type { DocumentItem } from '../types'
 
 const SOURCE_STYLES: Record<string, string> = {
   pubmed:  'text-blue-400 bg-blue-500/10 border-blue-500/20',
@@ -26,22 +26,6 @@ function stripHtml(html: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
-}
-
-function formatTimestamp(iso: string | null | undefined): string {
-  if (!iso) return 'Never'
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-    timeZoneName: 'short',
-  })
-}
-
-function mostRecent(...timestamps: (string | null | undefined)[]): string | null {
-  const valid = timestamps.filter(Boolean) as string[]
-  if (!valid.length) return null
-  return valid.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))
 }
 
 function DocumentCard({ doc }: { doc: DocumentItem }) {
@@ -87,11 +71,6 @@ export function CurrentNewsPage() {
   const [page, setPage] = useState(0)
   const LIMIT = 30
 
-  const { data: status } = useQuery<PipelineStatus>({
-    queryKey: ['pipeline-status'],
-    queryFn: () => api.getPipelineStatus(),
-  })
-
   // Fetch a wide sample once to discover which sources actually have data
   const { data: allSample } = useQuery({
     queryKey: ['documents', 'source-discovery'],
@@ -114,10 +93,6 @@ export function CurrentNewsPage() {
     }),
   })
 
-  const lastUpdated = status
-    ? mostRecent(status.last_research_run_at, status.last_hypothesis_run_at, status.last_ingested_at)
-    : null
-
   const totalPages = data ? Math.ceil(data.total / LIMIT) : 0
 
   return (
@@ -128,33 +103,8 @@ export function CurrentNewsPage() {
         <div className="mb-10">
           <h1 className="text-3xl font-bold text-white mb-2">Current News</h1>
           <p className="text-slate-400 text-sm">
-            All documents ingested by the surveillance pipeline, sourced from PubMed, WHO, CDC, ProMED, and news feeds.
+            Relevant articles sourced from WHO, CDC, and news feeds.
           </p>
-        </div>
-
-        {/* Last updated banner */}
-        <div className="mb-8 flex items-center gap-3 p-4 rounded-xl border border-accent/20 bg-accent/5">
-          <Clock className="w-5 h-5 text-accent shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-accent">Pipeline Last Run</p>
-            <p className="text-xs text-slate-400 mt-0.5">{formatTimestamp(lastUpdated)}</p>
-          </div>
-          {status && (
-            <div className="ml-auto flex gap-6 text-right">
-              <div>
-                <p className="text-xs text-slate-600">Documents</p>
-                <p className="text-sm font-semibold text-slate-300">{status.total_documents.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-600">Pathogens</p>
-                <p className="text-sm font-semibold text-slate-300">{status.total_pathogens}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-600">Research Articles</p>
-                <p className="text-sm font-semibold text-slate-300">{status.total_research_articles.toLocaleString()}</p>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Source filter — only shows sources present in the DB */}

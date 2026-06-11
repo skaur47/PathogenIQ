@@ -36,7 +36,7 @@ export function AboutPage() {
             PathogenIQ is an AI-powered platform that continuously ingests documents from global
             health authorities and news sources. A multi-agent pipeline extracts pathogen signals,
             synthesizes biological profiles, mines the research literature, and generates
-            hypothesis-driven research strategies — all without manual curation.
+            hypothesis-driven research strategies.
           </p>
           <p className="text-slate-500 text-sm mt-4 leading-relaxed">
             All AI-generated outputs require expert review before clinical or public health

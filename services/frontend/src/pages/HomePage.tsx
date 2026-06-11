@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle } from 'lucide-react'
 import { api } from '../api/client'
@@ -6,9 +7,21 @@ import { PathogenCard } from '../components/PathogenCard'
 import { PathogenModal } from '../components/PathogenModal'
 import type { PathogenProfile, PipelineStatus } from '../types'
 
-function StatBadge({ label, value }: { label: string; value: string | number }) {
+interface StatBadgeProps {
+  label: string
+  value: string | number
+  onClick?: () => void
+}
+
+function StatBadge({ label, value, onClick }: StatBadgeProps) {
   return (
-    <div className="flex flex-col items-center px-6 py-3">
+    <div
+      className={[
+        'flex flex-col items-center px-6 py-3',
+        onClick ? 'cursor-pointer hover:bg-white/5 transition-colors' : '',
+      ].join(' ')}
+      onClick={onClick}
+    >
       <span className="text-2xl font-bold text-accent tabular-nums">{value}</span>
       <span className="text-xs text-slate-500 mt-0.5">{label}</span>
     </div>
@@ -34,6 +47,8 @@ function mostRecent(...timestamps: (string | null | undefined)[]): string | null
 export function HomePage() {
   const [selected, setSelected] = useState<PathogenProfile | null>(null)
   const [phase, setPhase] = useState(0)
+  const navigate = useNavigate()
+  const pathogenGridRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase(1), 80)
@@ -58,6 +73,10 @@ export function HomePage() {
   const lastUpdated = status
     ? mostRecent(status.last_research_run_at, status.last_hypothesis_run_at, status.last_ingested_at)
     : null
+
+  const scrollToGrid = () => {
+    pathogenGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div className="min-h-screen">
@@ -101,9 +120,21 @@ export function HomePage() {
           }}
         >
           <div className="flex divide-x divide-border rounded-2xl border border-border bg-surface overflow-hidden">
-            <StatBadge label="Pathogens Tracked" value={status.total_pathogens} />
-            <StatBadge label="News Articles" value={status.total_documents.toLocaleString()} />
-            <StatBadge label="Research Articles" value={status.total_research_articles.toLocaleString()} />
+            <StatBadge
+              label="Pathogens Tracked"
+              value={status.total_pathogens}
+              onClick={scrollToGrid}
+            />
+            <StatBadge
+              label="News Articles"
+              value={status.total_documents.toLocaleString()}
+              onClick={() => navigate('/news')}
+            />
+            <StatBadge
+              label="Research Articles"
+              value={status.total_research_articles.toLocaleString()}
+              onClick={() => navigate('/research')}
+            />
             <div className="flex flex-col items-center justify-center px-6 py-3 flex-1">
               <span className="text-xs font-medium text-accent">Last Updated</span>
               <span className="text-xs text-slate-500 mt-0.5 text-center leading-tight">
@@ -115,7 +146,7 @@ export function HomePage() {
       )}
 
       {/* Pathogen grid — appears last, cards stagger in */}
-      <div className="mx-auto max-w-7xl px-6 pb-16">
+      <div ref={pathogenGridRef} className="mx-auto max-w-7xl px-6 pb-16">
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 9 }).map((_, i) => (
