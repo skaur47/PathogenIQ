@@ -114,11 +114,17 @@ def _get_redis_settings() -> RedisSettings:
 
     rediss:// (Upstash) needs ssl=True explicitly — from_dsn() alone is not
     enough on some ARQ versions and the worker silently fails to connect.
+
+    Upstash free tier drops idle connections after ~30s. conn_retries=20 with
+    a 0.5s delay gives the worker up to 10s to re-establish the connection
+    before giving up on a job cycle.
     """
     settings = get_settings()
     rs = RedisSettings.from_dsn(settings.redis_url)
     if settings.redis_url.startswith("rediss://"):
         rs.ssl = True
+    rs.conn_retries = 20
+    rs.conn_retry_delay = 0.5
     return rs
 
 
