@@ -101,6 +101,18 @@ export interface PipelineStatus {
   total_research_articles: number
 }
 
+export interface TriggerResponse {
+  job_id: string
+  agent: string
+  message: string
+}
+
+export interface JobStatusResponse {
+  job_id: string
+  status: string
+  result?: Record<string, unknown>
+}
+
 export interface DocumentItem {
   id: string
   source: string

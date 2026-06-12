@@ -1,12 +1,14 @@
 import type {
   DocumentListResponse,
   GraphData,
+  JobStatusResponse,
   PathogenHypothesis,
   PathogenResearch,
   PathogenSources,
   PathogensResponse,
   PathogenTrendsData,
   PipelineStatus,
+  TriggerResponse,
 } from '../types'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '') + '/api/v1'
@@ -59,6 +61,12 @@ export const api = {
     q.set('offset', String(params.offset ?? 0))
     return get<DocumentListResponse>(`/documents?${q}`)
   },
+
+  triggerPipeline: () =>
+    post<TriggerResponse>('/agents/trigger/run-pipeline', {}),
+
+  getJobStatus: (jobId: string) =>
+    get<JobStatusResponse>(`/ingestion/jobs/${jobId}`),
 
   subscribe: (name: string, email: string) =>
     post<{ message: string }>('/newsletter/subscribe', { name, email }),
