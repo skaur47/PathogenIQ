@@ -113,6 +113,11 @@ export interface JobStatusResponse {
   result?: Record<string, unknown>
 }
 
+export interface PipelineRunningResponse {
+  running: boolean
+  job_id: string | null
+}
+
 export interface DocumentItem {
   id: string
   source: string

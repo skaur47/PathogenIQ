@@ -7,6 +7,7 @@ import type {
   PathogenSources,
   PathogensResponse,
   PathogenTrendsData,
+  PipelineRunningResponse,
   PipelineStatus,
   TriggerResponse,
 } from '../types'
@@ -61,6 +62,9 @@ export const api = {
     q.set('offset', String(params.offset ?? 0))
     return get<DocumentListResponse>(`/documents?${q}`)
   },
+
+  getPipelineRunning: () =>
+    get<PipelineRunningResponse>('/agents/pipeline-running'),
 
   triggerPipeline: () =>
     post<TriggerResponse>('/agents/trigger/run-pipeline', {}),

@@ -28,6 +28,7 @@ from datetime import date, timedelta
 from typing import Any
 
 import structlog
+from arq.jobs import Job, JobStatus
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -658,6 +659,7 @@ async def trigger_run_pipeline(request: Request) -> AgentTriggerResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to enqueue pipeline job.",
         )
+    await arq_redis.set("pathogeniq:pipeline:latest_job_id", job.job_id, ex=86400)
     logger.info("full_pipeline_triggered", job_id=job.job_id)
     return AgentTriggerResponse(
         job_id=job.job_id,
@@ -667,6 +669,29 @@ async def trigger_run_pipeline(request: Request) -> AgentTriggerResponse:
             f"Poll GET /api/v1/ingestion/jobs/{job.job_id} for status."
         ),
     )
+
+
+class PipelineRunningResponse(BaseModel):
+    running: bool
+    job_id: str | None = None
+
+
+@router.get(
+    "/pipeline-running",
+    response_model=PipelineRunningResponse,
+    summary="Check if the full pipeline is currently running",
+)
+async def get_pipeline_running(request: Request) -> PipelineRunningResponse:
+    arq_redis = getattr(request.app.state, "arq_redis", None)
+    if arq_redis is None:
+        return PipelineRunningResponse(running=False)
+    raw = await arq_redis.get("pathogeniq:pipeline:latest_job_id")
+    if not raw:
+        return PipelineRunningResponse(running=False)
+    job_id = raw.decode() if isinstance(raw, bytes) else raw
+    job_status = await Job(job_id, arq_redis).status()
+    running = job_status in (JobStatus.queued, JobStatus.in_progress)
+    return PipelineRunningResponse(running=running, job_id=job_id if running else None)
 
 
 # ── Hypothesis query endpoints ────────────────────────────────────────────────

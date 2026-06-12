@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle } from 'lucide-react'
@@ -6,9 +6,6 @@ import { api } from '../api/client'
 import { PathogenCard } from '../components/PathogenCard'
 import { PathogenModal } from '../components/PathogenModal'
 import type { PathogenProfile, PipelineStatus } from '../types'
-
-const PIPELINE_JOB_KEY = 'pathogeniq_pipeline_job_id'
-const POLL_INTERVAL_MS = 15_000
 
 interface StatBadgeProps {
   label: string
@@ -50,65 +47,15 @@ function mostRecent(...timestamps: (string | null | undefined)[]): string | null
 export function HomePage() {
   const [selected, setSelected] = useState<PathogenProfile | null>(null)
   const [phase, setPhase] = useState(0)
-  const [pipelineRunning, setPipelineRunning] = useState(false)
-  const [triggerError, setTriggerError] = useState<string | null>(null)
   const navigate = useNavigate()
-  const pathogenGridRef = useRef<HTMLDivElement>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const stopPolling = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current)
-      pollRef.current = null
-    }
-  }
+  const { data: pipelineRunningData } = useQuery({
+    queryKey: ['pipeline-running'],
+    queryFn: () => api.getPipelineRunning(),
+    refetchInterval: 15_000,
+  })
 
-  const startPolling = (jobId: string) => {
-    stopPolling()
-    setPipelineRunning(true)
-    pollRef.current = setInterval(async () => {
-      try {
-        const status = await api.getJobStatus(jobId)
-        if (status.status === 'complete' || status.status === 'failed') {
-          stopPolling()
-          setPipelineRunning(false)
-          localStorage.removeItem(PIPELINE_JOB_KEY)
-        }
-      } catch {
-        // Ignore transient fetch errors — keep polling
-      }
-    }, POLL_INTERVAL_MS)
-  }
-
-  // On mount: resume polling for any in-progress job stored in localStorage
-  useEffect(() => {
-    const storedId = localStorage.getItem(PIPELINE_JOB_KEY)
-    if (storedId) {
-      api.getJobStatus(storedId)
-        .then(status => {
-          if (status.status === 'complete' || status.status === 'failed') {
-            localStorage.removeItem(PIPELINE_JOB_KEY)
-          } else {
-            startPolling(storedId)
-          }
-        })
-        .catch(() => localStorage.removeItem(PIPELINE_JOB_KEY))
-    }
-    return stopPolling
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleRunPipeline = async () => {
-    if (pipelineRunning) return
-    setTriggerError(null)
-    try {
-      const res = await api.triggerPipeline()
-      localStorage.setItem(PIPELINE_JOB_KEY, res.job_id)
-      startPolling(res.job_id)
-    } catch (err) {
-      setTriggerError(err instanceof Error ? err.message : 'Failed to start pipeline')
-    }
-  }
+  const pipelineRunning = pipelineRunningData?.running ?? false
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase(1), 80)
@@ -135,7 +82,7 @@ export function HomePage() {
     : null
 
   const scrollToGrid = () => {
-    pathogenGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    document.querySelector('[data-pathogen-grid]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
@@ -168,32 +115,11 @@ export function HomePage() {
             Track pathogens, understand disease dynamics, advance research.
           </p>
 
-          {/* Pipeline running status */}
-          <p
-            className="mt-3 text-sm italic text-accent/80 transition-all duration-500"
-            style={{ opacity: pipelineRunning ? 1 : 0, pointerEvents: 'none' }}
-          >
-            Currently running the pipeline... Stay tuned!
-          </p>
-
-          {/* Run pipeline button */}
-          <div className="mt-4">
-            <button
-              onClick={handleRunPipeline}
-              disabled={pipelineRunning}
-              className={[
-                'text-xs px-4 py-1.5 rounded-full border transition-all duration-200',
-                pipelineRunning
-                  ? 'border-accent/20 text-accent/40 cursor-not-allowed'
-                  : 'border-slate-700 text-slate-500 hover:border-accent/40 hover:text-accent/70',
-              ].join(' ')}
-            >
-              {pipelineRunning ? 'Pipeline running…' : 'Run pipeline'}
-            </button>
-            {triggerError && (
-              <p className="mt-2 text-xs text-red-400">{triggerError}</p>
-            )}
-          </div>
+          {pipelineRunning && (
+            <p className="mt-3 text-sm italic text-accent/80">
+              Currently running pipeline for pathogens... Stay tuned!
+            </p>
+          )}
         </div>
       </section>
 
@@ -238,7 +164,7 @@ export function HomePage() {
       )}
 
       {/* Pathogen grid — appears last, cards stagger in */}
-      <div ref={pathogenGridRef} className="mx-auto max-w-7xl px-6 pb-16">
+      <div data-pathogen-grid className="mx-auto max-w-7xl px-6 pb-16">
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 9 }).map((_, i) => (
