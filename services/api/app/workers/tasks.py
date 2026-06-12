@@ -485,8 +485,10 @@ async def task_send_newsletter(ctx: dict) -> dict:
     """
     Send the daily PathogenIQ digest to all active newsletter subscribers.
 
-    Fetches all active pathogens from PostgreSQL, builds a per-subscriber HTML
-    email, and delivers via SMTP. Skipped gracefully when SMTP_HOST is not set.
+    For each pathogen, includes: biological summary, 1-2 recent news/surveillance
+    documents, and 1 research article. Guarded by a Redis key so the digest is
+    sent at most once per calendar day regardless of how many times the task is
+    triggered (cron at 08:00 UTC + manual pipeline run).
 
     Scheduled daily at 08:00 UTC by WorkerSettings.cron_jobs.
     """
@@ -494,10 +496,24 @@ async def task_send_newsletter(ctx: dict) -> dict:
     log = logger.bind(task="send_newsletter", job_id=ctx.get("job_id"))
     log.info("task_start")
 
-    from app.db.session import AsyncSessionLocal
+    from datetime import date
+    from sqlalchemy import select
+    from app.db.models.document import Document
+    from app.db.models.pathogen_mention import PathogenMention
+    from app.db.models.research import ResearchArticle
     from app.repositories.newsletter import NewsletterRepository
     from app.repositories.pathogen import PathogenRepository
     from app.services.newsletter import send_digest_to
+
+    # Once-per-day guard: prevent double-sends when cron + manual pipeline both fire
+    arq_redis = ctx.get("redis")
+    today = date.today().isoformat()
+    if arq_redis:
+        guard_key = f"newsletter:sent:{today}"
+        if await arq_redis.get(guard_key):
+            log.info("newsletter_already_sent_today", date=today)
+            return {"sent": 0, "reason": "already_sent_today", "date": today}
+        await arq_redis.set(guard_key, "1", ex=60 * 60 * 25)
 
     async with AsyncSessionLocal() as session:
         sub_repo = NewsletterRepository(session)
@@ -505,18 +521,54 @@ async def task_send_newsletter(ctx: dict) -> dict:
         subscribers = await sub_repo.get_active_subscribers()
         pathogens_orm = await path_repo.get_all()
 
-    pathogens = [
-        {
-            "species_name": p.species_name,
-            "common_name": p.common_name,
-            "category": p.category.value if p.category else None,
-            "transmission_routes": p.transmission_routes or [],
-            "reservoir_hosts": p.reservoir_hosts or [],
-            "who_priority": p.who_priority,
-            "description": p.description,
-        }
-        for p in pathogens_orm
-    ]
+        pathogens = []
+        for p in pathogens_orm:
+            # 1-2 most recent surveillance/news documents mentioning this pathogen
+            news_result = await session.execute(
+                select(Document)
+                .join(PathogenMention, Document.id == PathogenMention.document_id)
+                .where(PathogenMention.pathogen_name == p.species_name)
+                .where(Document.title.isnot(None))
+                .order_by(Document.created_at.desc())
+                .limit(2)
+            )
+            news_docs = list(news_result.scalars().all())
+
+            # 1 most recent research article
+            research_result = await session.execute(
+                select(ResearchArticle)
+                .where(ResearchArticle.pathogen_id == p.id)
+                .where(ResearchArticle.title.isnot(None))
+                .order_by(ResearchArticle.published_date.desc().nulls_last())
+                .limit(1)
+            )
+            research_article = research_result.scalar_one_or_none()
+
+            pathogens.append({
+                "species_name": p.species_name,
+                "common_name": p.common_name,
+                "category": p.category.value if p.category else None,
+                "transmission_routes": p.transmission_routes or [],
+                "reservoir_hosts": p.reservoir_hosts or [],
+                "who_priority": p.who_priority,
+                "description": p.description,
+                "news_articles": [
+                    {
+                        "title": doc.title,
+                        "url": doc.url,
+                        "source": doc.source.value,
+                        "published_date": doc.published_date,
+                    }
+                    for doc in news_docs
+                ],
+                "research_article": {
+                    "title": research_article.title,
+                    "authors": research_article.authors,
+                    "url": research_article.source_url,
+                    "published_date": research_article.published_date,
+                    "summary": research_article.article_summary,
+                } if research_article else None,
+            })
 
     sent = 0
     for sub in subscribers:

@@ -106,7 +106,7 @@ echo -e "${BLUE}  API: ${API}${NC}"
 echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 # ── 1. Ingest all sources ────────────────────────────────────────────────────────
-step "1/8  Data ingestion (CDC + WHO + ProMED + News)"
+step "1/9  Data ingestion (CDC + WHO + ProMED + News)"
 CDC_JOB=$(trigger    "ingestion/trigger" "CDC"    '{"source":"cdc"}')
 WHO_JOB=$(trigger    "ingestion/trigger" "WHO"    '{"source":"who"}')
 PROMED_JOB=$(trigger "ingestion/trigger" "ProMED" '{"source":"promed"}')
@@ -118,33 +118,45 @@ poll_job "$PROMED_JOB" "ProMED collection"
 poll_job "$NEWS_JOB"   "News collection"
 
 # ── 2. Sentinel ──────────────────────────────────────────────────────────────────
-step "2/8  Sentinel Agent (extract pathogen mentions)"
+step "2/9  Sentinel Agent (extract pathogen mentions)"
 run_step "agents/trigger/sentinel" "Sentinel Agent"
 
 # ── 3. Scholar ───────────────────────────────────────────────────────────────────
-step "3/8  Scholar Agent (synthesize biological profiles)"
+step "3/9  Scholar Agent (synthesize biological profiles)"
 run_step "agents/trigger/scholar" "Scholar Agent"
 
 # ── 4. Dedup + Graph Sync ────────────────────────────────────────────────────────
-step "4/8  Deduplicator + Knowledge Graph sync"
+step "4/9  Deduplicator + Knowledge Graph sync"
 run_step "agents/trigger/dedup"      "Deduplicator"
 run_step "agents/trigger/graph-sync" "Graph Sync"
 
 # ── 5. Research ──────────────────────────────────────────────────────────────────
-step "5/8  Research Agent (PubMed literature mining per pathogen)"
+step "5/9  Research Agent (PubMed literature mining per pathogen)"
 run_step "agents/trigger/research" "Research Agent"
 
 # ── 6. Verify Research ───────────────────────────────────────────────────────────
-step "6/8  Verifier — research quality gate"
+step "6/9  Verifier — research quality gate"
 run_step "agents/trigger/verify-research" "Verifier (research)"
 
 # ── 7. Hypothesis ────────────────────────────────────────────────────────────────
-step "7/8  Hypothesis Agent (research strategy synthesis)"
+step "7/9  Hypothesis Agent (research strategy synthesis)"
 run_step "agents/trigger/hypothesis" "Hypothesis Agent"
 
 # ── 8. Verify Hypothesis ─────────────────────────────────────────────────────────
-step "8/8  Verifier — hypothesis quality gate"
+step "8/9  Verifier — hypothesis quality gate"
 run_step "agents/trigger/verify-hypothesis" "Verifier (hypothesis)"
+
+# ── 9. Email Digest ───────────────────────────────────────────────────────────────
+step "9/9  Email Digest"
+GUARD_FILE="${HOME}/.pathogeniq_last_digest"
+TODAY=$(date +%Y-%m-%d)
+if [[ -f "$GUARD_FILE" ]] && [[ "$(cat "$GUARD_FILE")" == "$TODAY" ]]; then
+  warn "Digest already sent today ($TODAY) — skipping. Delete ~/.pathogeniq_last_digest to force a resend."
+else
+  run_step "agents/trigger/send-newsletter" "Email Digest"
+  echo "$TODAY" > "$GUARD_FILE"
+  ok "Digest guard saved to ${GUARD_FILE}"
+fi
 
 # ── Done ─────────────────────────────────────────────────────────────────────────
 ELAPSED=$(( $(date +%s) - START ))

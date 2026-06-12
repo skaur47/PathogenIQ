@@ -9,7 +9,7 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
-      # Set these as secrets in the Render dashboard:
+      # Set these as secrets in the Render dashboard → your service → Environment:
       # DATABASE_URL       — Neon connection string (postgresql+asyncpg://...)
       # NEO4J_URI          — Neo4j Aura (neo4j+s://...)
       # NEO4J_USER         — neo4j
@@ -21,3 +21,10 @@ services:
       # LLM_MODEL          — llama-3.3-70b-versatile
       # LLM_API_KEY        — your Groq API key
       # CORS_ORIGINS       — https://your-app.vercel.app
+      # ── Email digest (Resend SMTP) ──────────────────────────────────────────
+      # SMTP_HOST          — smtp.resend.com
+      # SMTP_PORT          — 587
+      # SMTP_USER          — resend
+      # SMTP_PASSWORD      — your Resend API key (re_...)
+      # SMTP_FROM          — PathogenIQ <onboarding@resend.dev>
+      # FRONTEND_BASE_URL  — https://pathogen-iq.vercel.app
