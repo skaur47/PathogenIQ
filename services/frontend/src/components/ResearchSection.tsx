@@ -7,7 +7,7 @@ import type { ResearchArticle } from '../types'
 const TABS = [
   { key: 'all',                  label: 'All',               icon: BookOpen },
   { key: 'molecular_biology',    label: 'Molecular Biology', icon: Dna },
-  { key: 'clinical_epidemiology',label: 'Clinical Epi',      icon: Activity },
+  { key: 'clinical_epidemiology',label: 'Clinical Epidemiology', icon: Activity },
   { key: 'therapeutics',         label: 'Therapeutics',      icon: Pill },
   { key: 'experiments',          label: 'Experiments',       icon: FlaskConical },
 ]
@@ -32,7 +32,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   molecular_biology: 'Molecular Biology',
   experiments: 'Experiments',
   therapeutics: 'Therapeutics',
-  clinical_epidemiology: 'Clinical Epi',
+  clinical_epidemiology: 'Clinical Epidemiology',
   infection_mechanism: 'Infection Mechanism',
   wet_lab: 'Wet Lab',
   clinical_trial: 'Clinical Trial',

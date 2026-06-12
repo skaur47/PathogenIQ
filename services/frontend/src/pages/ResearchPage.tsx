@@ -20,7 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   molecular_biology:    'Molecular Biology',
   experiments:          'Experiments',
   therapeutics:         'Therapeutics',
-  clinical_epidemiology:'Clinical Epi',
+  clinical_epidemiology:'Clinical Epidemiology',
   infection_mechanism:  'Infection Mechanism',
   wet_lab:              'Wet Lab',
   clinical_trial:       'Clinical Trial',
@@ -140,7 +140,7 @@ export function ResearchPage() {
                   : 'text-slate-400 hover:text-slate-200 border border-transparent hover:border-border hover:bg-white/5',
               ].join(' ')}
             >
-              {name}
+              {name === 'all' ? 'ALL' : name}
             </button>
           ))}
         </div>
