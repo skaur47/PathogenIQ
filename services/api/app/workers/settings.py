@@ -163,7 +163,7 @@ class WorkerSettings:
         # cron(task_collect_who,    hour={0, 4, 8, 12, 16, 20}, minute=10),
         # cron(task_collect_news,   hour={0, 4, 8, 12, 16, 20}, minute=15),
         # cron(task_run_full_pipeline, hour=2, minute=0),
-        cron(task_send_newsletter, hour=8, minute=0),
+        # newsletter is now step 8 of task_run_full_pipeline — not a standalone cron
     ]
 
     # ── Lifecycle hooks ───────────────────────────────────────────────────────

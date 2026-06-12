@@ -390,6 +390,7 @@ async def task_run_full_pipeline(ctx: dict) -> dict:
       6. Research + Verifier — PubMed synthesis for all pathogens
       7. Hypothesis + Verifier — strategy synthesis for all pathogens
       8. Graph sync — push enriched data to Neo4j
+      9. Newsletter — send daily digest (guarded: once per calendar day)
 
     Scheduled daily at 02:00 UTC via WorkerSettings.cron_jobs.
     """
@@ -475,6 +476,11 @@ async def task_run_full_pipeline(ctx: dict) -> dict:
     r = await run_graph_sync()
     results["graph_synced"] = r.get("pathogens_synced", 0)
     log.info("graph_sync_done", synced=r.get("pathogens_synced", 0))
+
+    # ── Phase 8: Newsletter ───────────────────────────────────────────────────
+    newsletter_result = await task_send_newsletter(ctx)
+    results["newsletter"] = newsletter_result
+    log.info("newsletter_done", **newsletter_result)
 
     results["elapsed_seconds"] = round(time.monotonic() - t0)
     log.info("task_done", elapsed_s=results["elapsed_seconds"])
