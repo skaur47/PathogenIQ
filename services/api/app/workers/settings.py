@@ -174,8 +174,8 @@ class WorkerSettings:
     redis_settings = _get_redis_settings()
 
     # ── Job settings ──────────────────────────────────────────────────────────
-    # Keep task results in Redis for 7 days (job status + return value).
-    keep_result_s: int = 60 * 60 * 24 * 7
+    # Keep task results in Redis for 1 hour (job status + return value).
+    keep_result_s: int = 60 * 60
 
     # Kill a task if it runs longer than this many seconds.
     # Full-pipeline task runs all agents sequentially — allow up to 8 hours
