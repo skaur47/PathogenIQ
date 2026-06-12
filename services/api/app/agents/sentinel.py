@@ -254,7 +254,17 @@ def _parse_json_array(raw: str) -> list[dict]:
     """Strip markdown fences if present, then parse as a JSON array."""
     text = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
     text = re.sub(r"```\s*$", "", text.strip(), flags=re.MULTILINE)
-    data = json.loads(text.strip())
+    text = text.strip()
+    if not text:
+        return []
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        sanitized = re.sub(r"[\x00-\x1f\x7f]", " ", text)
+        try:
+            data = json.loads(sanitized)
+        except json.JSONDecodeError:
+            return []
     return data if isinstance(data, list) else []
 
 
