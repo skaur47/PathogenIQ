@@ -57,7 +57,7 @@ _YEARS = '"2022"[dp] OR "2023"[dp] OR "2024"[dp] OR "2025"[dp] OR "2026"[dp]'
 # Concurrency limits
 _PUBMED_CONCURRENCY = 1   # single NCBI slot; 0.35s hold keeps us under 3 req/s
 _LLM_CONCURRENCY = 8      # max simultaneous LLM synthesis calls
-_PATHOGEN_CONCURRENCY = 3 # parallel pathogens; Groq free = 30 req/min, 3×~15s ≈ 12 req/min (safe)
+_PATHOGEN_CONCURRENCY = 2 # parallel pathogens; llama-3.1-8b-instant: 30K TPM, 2×~4.5K ≈ 9K/min (safe)
 
 # Module-level semaphore — shared across ALL concurrent research job invocations.
 # If two ARQ jobs happen to run simultaneously they still share one NCBI slot.

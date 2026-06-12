@@ -60,10 +60,10 @@ from .validators import correct_pathogen_profile
 logger = structlog.get_logger(__name__)
 
 MIN_MENTION_THRESHOLD = 1
-MAX_ABSTRACTS = 8          # 8 abstracts gives richer evidence for accurate field synthesis
+MAX_ABSTRACTS = 4          # 4 abstracts balances evidence quality vs Groq token budget
 MAX_PATHOGENS_PER_RUN = 50  # process all pathogens per run on Groq
 _ABSTRACT_CHARS = 600      # chars per abstract in the synthesis prompt
-_CONCURRENCY = 3           # parallel LLM calls; Groq free = 30 req/min, 3×~15s ≈ 12 req/min (safe)
+_CONCURRENCY = 2           # parallel LLM calls; llama-3.1-8b-instant: 30K TPM, 2×~4.5K ≈ 9K/min (safe)
 
 # English function words that appear in descriptive phrases but not scientific names
 _NL_INDICATORS = frozenset({
