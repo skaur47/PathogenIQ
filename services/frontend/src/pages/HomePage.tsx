@@ -119,27 +119,32 @@ export function HomePage() {
             transform: phase >= 3 ? 'translateY(0)' : 'translateY(12px)',
           }}
         >
-          <div className="flex divide-x divide-border rounded-2xl border border-border bg-surface overflow-hidden">
-            <StatBadge
-              label="Pathogens Tracked"
-              value={status.total_pathogens}
-              onClick={scrollToGrid}
-            />
-            <StatBadge
-              label="News Articles"
-              value={status.total_documents.toLocaleString()}
-              onClick={() => navigate('/news')}
-            />
-            <StatBadge
-              label="Research Articles"
-              value={status.total_research_articles.toLocaleString()}
-              onClick={() => navigate('/research')}
-            />
-            <div className="flex flex-col items-center justify-center px-6 py-3 flex-1">
-              <span className="text-xs font-medium text-accent">Last Updated</span>
-              <span className="text-xs text-slate-500 mt-0.5 text-center leading-tight">
-                {formatTimestamp(lastUpdated)}
-              </span>
+          <div
+            className="overflow-x-auto rounded-2xl border border-border"
+            style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="flex divide-x divide-border bg-surface min-w-max">
+              <StatBadge
+                label="Pathogens Tracked"
+                value={status.total_pathogens}
+                onClick={scrollToGrid}
+              />
+              <StatBadge
+                label="News Articles"
+                value={status.total_documents.toLocaleString()}
+                onClick={() => navigate('/news')}
+              />
+              <StatBadge
+                label="Research Articles"
+                value={status.total_research_articles.toLocaleString()}
+                onClick={() => navigate('/research')}
+              />
+              <div className="flex flex-col items-center justify-center px-6 py-3">
+                <span className="text-xs font-medium text-accent">Last Updated</span>
+                <span className="text-xs text-slate-500 mt-0.5 text-center leading-tight">
+                  {formatTimestamp(lastUpdated)}
+                </span>
+              </div>
             </div>
           </div>
         </div>

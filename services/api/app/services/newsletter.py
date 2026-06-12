@@ -52,29 +52,29 @@ def _pathogen_row(p: dict) -> str:
     common   = _esc(p.get("common_name") or "")
     category = _esc((p.get("category") or "unknown").capitalize())
     desc_raw = (p.get("description") or "").strip()
-    desc     = _esc(_trunc(desc_raw, 280)) if desc_raw else ""
+    desc     = _esc(_trunc(desc_raw, 300)) if desc_raw else ""
 
     # ── Header ──────────────────────────────────────────────────────────────
     common_html = (
-        f'&nbsp;<span style="font-size:12px;color:#64748b;">{common}</span>'
+        f'<span style="font-size:13px;color:#94a3b8;margin-left:8px;">{common}</span>'
         if common else ""
     )
     category_badge = (
-        f'<span style="display:inline-block;margin-left:6px;font-size:10px;'
-        f'color:#475569;padding:1px 6px;border-radius:3px;background:#1e293b;">'
-        f'{category}</span>'
+        f'<span style="display:inline-block;margin-left:8px;font-size:10px;'
+        f'color:#94a3b8;padding:2px 8px;border-radius:4px;background:#1e293b;'
+        f'letter-spacing:0.3px;">{category}</span>'
     )
 
     header = (
-        f'<p style="margin:0 0 6px;">'
-        f'<span style="font-size:15px;font-weight:700;color:#f1f5f9;">{name}</span>'
+        f'<p style="margin:0 0 8px;line-height:1.3;">'
+        f'<span style="font-size:19px;font-weight:700;color:#f8fafc;">{name}</span>'
         f'{common_html}{category_badge}'
         f'</p>'
     )
 
     # ── Description ─────────────────────────────────────────────────────────
     desc_html = (
-        f'<p style="margin:0 0 12px;font-size:12px;color:#64748b;line-height:1.55;">'
+        f'<p style="margin:0 0 16px;font-size:13px;color:#94a3b8;line-height:1.6;">'
         f'{desc}</p>'
         if desc else ""
     )
@@ -86,10 +86,10 @@ def _pathogen_row(p: dict) -> str:
         url   = _esc(article.get("url") or "#")
         src   = _esc(_SOURCE_LABELS.get(article.get("source") or "", (article.get("source") or "").upper()))
         news_items_html += (
-            f'<tr><td style="padding:2px 0;">'
-            f'<span style="font-size:10px;color:#475569;text-transform:uppercase;'
-            f'letter-spacing:0.4px;">{src}</span>'
-            f'&nbsp;<a href="{url}" style="font-size:12px;color:#94a3b8;'
+            f'<tr><td style="padding:4px 0;">'
+            f'<span style="font-size:10px;color:#0dd9bb;text-transform:uppercase;'
+            f'letter-spacing:0.5px;font-weight:600;">{src}</span>'
+            f'&nbsp;&nbsp;<a href="{url}" style="font-size:12px;color:#cbd5e1;'
             f'text-decoration:none;">{title}</a>'
             f'</td></tr>'
         )
@@ -97,9 +97,9 @@ def _pathogen_row(p: dict) -> str:
     news_section = ""
     if news_items_html:
         news_section = (
-            f'<p style="margin:0 0 4px;font-size:10px;font-weight:600;color:#475569;'
-            f'text-transform:uppercase;letter-spacing:0.5px;">Surveillance</p>'
-            f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">'
+            f'<p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#64748b;'
+            f'text-transform:uppercase;letter-spacing:0.8px;">Surveillance</p>'
+            f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">'
             f'{news_items_html}'
             f'</table>'
         )
@@ -112,19 +112,19 @@ def _pathogen_row(p: dict) -> str:
         ra_url     = _esc(ra.get("url") or "#")
         ra_authors = _esc(_trunc(ra.get("authors") or "", 80)) if ra.get("authors") else ""
         ra_summary_raw = (ra.get("summary") or "").strip()
-        ra_summary = _esc(_trunc(ra_summary_raw, 200)) if ra_summary_raw else ""
+        ra_summary = _esc(_trunc(ra_summary_raw, 220)) if ra_summary_raw else ""
 
         research_section = (
-            f'<p style="margin:0 0 4px;font-size:10px;font-weight:600;color:#475569;'
-            f'text-transform:uppercase;letter-spacing:0.5px;">Research Highlight</p>'
-            f'<a href="{ra_url}" style="font-size:12px;color:#6366f1;'
-            f'text-decoration:none;display:block;margin-bottom:2px;">{ra_title}</a>'
-            + (f'<p style="margin:0 0 2px;font-size:11px;color:#475569;">{ra_authors}</p>' if ra_authors else "")
-            + (f'<p style="margin:0;font-size:11px;color:#64748b;line-height:1.45;">{ra_summary}</p>' if ra_summary else "")
+            f'<p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#64748b;'
+            f'text-transform:uppercase;letter-spacing:0.8px;">Research Highlight</p>'
+            f'<a href="{ra_url}" style="font-size:13px;color:#0dd9bb;'
+            f'text-decoration:none;display:block;margin-bottom:4px;line-height:1.4;">{ra_title}</a>'
+            + (f'<p style="margin:0 0 4px;font-size:11px;color:#64748b;">{ra_authors}</p>' if ra_authors else "")
+            + (f'<p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.55;">{ra_summary}</p>' if ra_summary else "")
         )
 
     return (
-        f'<tr><td style="padding:20px 0;border-bottom:1px solid #1e293b;">'
+        f'<tr><td style="padding:28px 0;border-bottom:1px solid #1e293b;">'
         f'{header}{desc_html}{news_section}{research_section}'
         f'</td></tr>'
     )
@@ -185,14 +185,14 @@ def _build_html(
         <!-- Footer -->
         <tr>
           <td style="padding:28px 0 0;">
-            <p style="margin:0 0 6px;font-size:11px;color:#1e293b;border-top:1px solid #1e293b;padding-top:20px;">
+            <p style="margin:0 0 8px;font-size:11px;color:#64748b;border-top:1px solid #1e293b;padding-top:20px;line-height:1.5;">
               You are receiving this because you subscribed at PathogenIQ.
               PathogenIQ is a research intelligence tool — outputs require expert review before clinical application.
             </p>
-            <p style="margin:0;font-size:11px;color:#334155;">
-              <a href="{_esc(unsubscribe_url)}" style="color:#475569;text-decoration:underline;">Unsubscribe</a>
+            <p style="margin:0;font-size:11px;color:#64748b;">
+              <a href="{_esc(unsubscribe_url)}" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
               &nbsp;·&nbsp;
-              <a href="https://pathogen-iq.vercel.app" style="color:#475569;text-decoration:underline;">Dashboard</a>
+              <a href="https://pathogen-iq.vercel.app" style="color:#94a3b8;text-decoration:underline;">Dashboard</a>
             </p>
           </td>
         </tr>
