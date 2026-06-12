@@ -110,9 +110,16 @@ async def on_shutdown(ctx: dict) -> None:
 
 
 def _get_redis_settings() -> RedisSettings:
-    """Parse the REDIS_URL from settings into an ARQ RedisSettings object."""
+    """Parse the REDIS_URL from settings into an ARQ RedisSettings object.
+
+    rediss:// (Upstash) needs ssl=True explicitly — from_dsn() alone is not
+    enough on some ARQ versions and the worker silently fails to connect.
+    """
     settings = get_settings()
-    return RedisSettings.from_dsn(settings.redis_url)
+    rs = RedisSettings.from_dsn(settings.redis_url)
+    if settings.redis_url.startswith("rediss://"):
+        rs.ssl = True
+    return rs
 
 
 class WorkerSettings:
