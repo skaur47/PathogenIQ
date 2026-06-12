@@ -117,9 +117,7 @@ export function ContactPage() {
         <div className="mb-10">
           <h1 className="text-3xl font-bold text-white mb-2">Daily Digest</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Get a daily email summary of pathogens currently tracked by PathogenIQ —
-            transmission routes, reservoir hosts, WHO priority status, and more.
-            Unsubscribe at any time from the email.
+            Get a daily email summary of pathogens currently tracked by PathogenIQ. Unsubscribe at any time from the email.
           </p>
         </div>
 
