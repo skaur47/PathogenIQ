@@ -572,8 +572,8 @@ async def task_send_newsletter(ctx: dict) -> dict:
 
     sent = 0
     for sub in subscribers:
-        await send_digest_to(sub, pathogens)
-        sent += 1
+        if await send_digest_to(sub, pathogens):
+            sent += 1
 
     log.info("task_done", subscribers=len(subscribers), sent=sent)
     return {"sent": sent, "subscribers": len(subscribers)}

@@ -281,7 +281,7 @@ def _send_smtp(to_email: str, subject: str, html: str, plain: str) -> None:
 async def send_digest_to(
     subscriber: NewsletterSubscriber,
     pathogens: list[dict],
-) -> None:
+) -> bool:
     settings = get_settings()
     unsubscribe_url = (
         f"{settings.frontend_base_url}/contact"
@@ -294,7 +294,27 @@ async def send_digest_to(
     plain = _build_plain(subscriber.name, pathogens, unsubscribe_url)
 
     try:
-        await asyncio.to_thread(_send_smtp, subscriber.email, subject, html, plain)
+        if settings.smtp_host == "smtp.resend.com":
+            # Render blocks outbound SMTP (port 587). Use Resend REST API over
+            # HTTPS (port 443) instead. smtp_password holds the Resend API key.
+            import httpx
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {settings.smtp_password}"},
+                    json={
+                        "from": settings.smtp_from,
+                        "to": [subscriber.email],
+                        "subject": subject,
+                        "html": html,
+                        "text": plain,
+                    },
+                )
+                resp.raise_for_status()
+        else:
+            await asyncio.to_thread(_send_smtp, subscriber.email, subject, html, plain)
         logger.info("newsletter_sent", to=subscriber.email)
+        return True
     except Exception as exc:
         logger.warning("newsletter_send_failed", to=subscriber.email, error=str(exc))
+        return False
