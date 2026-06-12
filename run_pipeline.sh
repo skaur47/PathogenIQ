@@ -11,24 +11,24 @@
 #   7. Hypothesis  →  8. Verify Hypothesis
 set -euo pipefail
 
-API="${PATHOGENIQ_API:-https://pathogeniq-api.fly.dev}/api/v1"
+API="${PATHOGENIQ_API:-https://pathogeniq.onrender.com}/api/v1"
 POLL_INTERVAL=12   # seconds between status polls
-MAX_POLLS=50       # ~10 minutes max per step before timeout
+MAX_POLLS=150      # ~30 minutes max per step before timeout
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 ts()   { date '+%H:%M:%S'; }
-log()  { echo -e "${CYAN}[$(ts)]${NC} $*"; }
-ok()   { echo -e "${GREEN}[$(ts)] ✓${NC} $*"; }
-warn() { echo -e "${YELLOW}[$(ts)] ⚠${NC} $*"; }
+log()  { echo -e "${CYAN}[$(ts)]${NC} $*" >&2; }
+ok()   { echo -e "${GREEN}[$(ts)] ✓${NC} $*" >&2; }
+warn() { echo -e "${YELLOW}[$(ts)] ⚠${NC} $*" >&2; }
 err()  { echo -e "${RED}[$(ts)] ✗${NC} $*" >&2; }
-step() { echo -e "\n${BOLD}${BLUE}▶ $*${NC}"; }
+step() { echo -e "\n${BOLD}${BLUE}▶ $*${NC}" >&2; }
 
 # Extract a key from a JSON string using Python (no jq dependency)
 json_field() {
-  python3 -c "import sys,json; print(json.loads(sys.argv[1]).get(sys.argv[2],'')||'')" \
-    "$1" "$2" 2>/dev/null || true
+  echo "$1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get(sys.argv[1]) or '')" \
+    "$2" 2>/dev/null || true
 }
 
 # POST to an API endpoint and return the job_id

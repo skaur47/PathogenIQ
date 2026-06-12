@@ -53,7 +53,7 @@ from app.repositories.pathogen import PathogenRepository
 from app.repositories.pathogen_mention import PathogenMentionRepository
 
 from .filters import is_non_pathogen
-from .llm import get_llm
+from .llm import get_llm, llm_invoke_with_retry
 from .prompts import SCHOLAR_SYSTEM
 from .validators import correct_pathogen_profile
 
@@ -63,6 +63,7 @@ MIN_MENTION_THRESHOLD = 1
 MAX_ABSTRACTS = 8          # 8 abstracts gives richer evidence for accurate field synthesis
 MAX_PATHOGENS_PER_RUN = 50  # process all pathogens per run on Groq
 _ABSTRACT_CHARS = 600      # chars per abstract in the synthesis prompt
+_CONCURRENCY = 3           # parallel LLM calls; Groq free = 30 req/min, 3×~15s ≈ 12 req/min (safe)
 
 # English function words that appear in descriptive phrases but not scientific names
 _NL_INDICATORS = frozenset({
@@ -122,64 +123,42 @@ async def load_targets(state: ScholarState) -> ScholarState:
 
 async def research_pathogens(state: ScholarState) -> ScholarState:
     """
-    For each target pathogen:
-      1. Query PubMed for recent literature using the pathogen name.
-      2. Synthesize a biological profile via LLM.
-      3. Immediately persist the profile to the DB.
+    Research all target pathogens in parallel, bounded by _CONCURRENCY.
 
-    Saving after each synthesis (rather than batching at the end) makes this
-    node timeout-safe: partial results survive even if the job is killed mid-run.
+    Each worker: fetch PubMed abstracts → LLM synthesis (with retry) → DB upsert.
+    Saving inside each task means partial results survive a timeout.
     """
     llm = get_llm(max_tokens=700)
     pubmed = PubMedCollector()
-    profiles: list[dict] = []
-    errors = list(state["errors"])
-    error_count = state["error_count"]
-    saved_count = state["saved_count"]
+    sem = asyncio.Semaphore(_CONCURRENCY)
 
-    for i, pathogen_name in enumerate(state["target_pathogens"]):
-        if i > 0:
-            await asyncio.sleep(20)  # 20s between pathogens to avoid Groq TPM rate limit
-        try:
-            papers = await _fetch_pubmed_papers(pubmed, pathogen_name)
-            # Retry up to 3 times on Groq 429 rate-limit errors
-            profile = None
-            for attempt in range(3):
-                try:
-                    profile = await _synthesize_profile(llm, pathogen_name, papers)
-                    break
-                except Exception as exc:
-                    if "429" in str(exc) and attempt < 2:
-                        wait = 60 * (attempt + 1)
-                        logger.warning("groq_rate_limit_retry", pathogen=pathogen_name, attempt=attempt + 1, wait_s=wait)
-                        await asyncio.sleep(wait)
-                    else:
-                        raise
-            profile["pathogen_name"] = pathogen_name
-            profiles.append(profile)
-            logger.info(
-                "scholar_profiled",
-                pathogen=pathogen_name,
-                papers_used=len(papers),
-            )
-            # Persist immediately — don't wait for save_profiles node
-            async with AsyncSessionLocal() as session:
-                async with session.begin():
-                    await _upsert_pathogen(PathogenRepository(session), profile)
-            saved_count += 1
-            logger.info("scholar_profile_saved", pathogen=pathogen_name)
-        except Exception as exc:
-            msg = f"{pathogen_name}: {type(exc).__name__}: {exc}"
-            logger.warning("scholar_research_error", pathogen=pathogen_name, error=str(exc))
-            errors.append(msg)
-            error_count += 1
+    async def _process_one(pathogen_name: str) -> tuple[dict | None, str | None]:
+        async with sem:
+            try:
+                papers = await _fetch_pubmed_papers(pubmed, pathogen_name)
+                profile = await _synthesize_profile(llm, pathogen_name, papers)
+                profile["pathogen_name"] = pathogen_name
+                async with AsyncSessionLocal() as session:
+                    async with session.begin():
+                        await _upsert_pathogen(PathogenRepository(session), profile)
+                logger.info("scholar_profile_saved", pathogen=pathogen_name, papers_used=len(papers))
+                return profile, None
+            except Exception as exc:
+                msg = f"{pathogen_name}: {type(exc).__name__}: {exc}"
+                logger.warning("scholar_research_error", pathogen=pathogen_name, error=str(exc))
+                return None, msg
+
+    results = await asyncio.gather(*[_process_one(n) for n in state["target_pathogens"]])
+
+    profiles = [p for p, _ in results if p is not None]
+    new_errors = [e for _, e in results if e is not None]
 
     return {
         **state,
         "profiles": profiles,
-        "saved_count": saved_count,
-        "errors": errors,
-        "error_count": error_count,
+        "saved_count": state["saved_count"] + len(profiles),
+        "errors": state["errors"] + new_errors,
+        "error_count": state["error_count"] + len(new_errors),
     }
 
 
@@ -260,8 +239,8 @@ async def _synthesize_profile(
     papers: list[dict],
 ) -> dict:
     """
-    Ask Claude to synthesize a biological profile from PubMed abstracts.
-    Returns a parsed profile dict ready for DB insertion.
+    Ask the LLM to synthesize a biological profile from PubMed abstracts.
+    Uses llm_invoke_with_retry to handle Groq 429 rate-limit errors gracefully.
     """
     if papers:
         paper_blocks = [
@@ -283,11 +262,12 @@ async def _synthesize_profile(
         f"{literature_section}"
     )
 
-    response = await llm.ainvoke([
-        SystemMessage(content=SCHOLAR_SYSTEM),
-        HumanMessage(content=user_content),
-    ])
-    return _parse_json_object(response.content)
+    content = await llm_invoke_with_retry(
+        llm,
+        [SystemMessage(content=SCHOLAR_SYSTEM), HumanMessage(content=user_content)],
+        pathogen=pathogen_name,
+    )
+    return _parse_json_object(content)
 
 
 def _parse_json_object(raw: str) -> dict:
