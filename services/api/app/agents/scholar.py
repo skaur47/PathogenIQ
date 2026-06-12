@@ -142,7 +142,19 @@ async def research_pathogens(state: ScholarState) -> ScholarState:
             await asyncio.sleep(20)  # 20s between pathogens to avoid Groq TPM rate limit
         try:
             papers = await _fetch_pubmed_papers(pubmed, pathogen_name)
-            profile = await _synthesize_profile(llm, pathogen_name, papers)
+            # Retry up to 3 times on Groq 429 rate-limit errors
+            profile = None
+            for attempt in range(3):
+                try:
+                    profile = await _synthesize_profile(llm, pathogen_name, papers)
+                    break
+                except Exception as exc:
+                    if "429" in str(exc) and attempt < 2:
+                        wait = 60 * (attempt + 1)
+                        logger.warning("groq_rate_limit_retry", pathogen=pathogen_name, attempt=attempt + 1, wait_s=wait)
+                        await asyncio.sleep(wait)
+                    else:
+                        raise
             profile["pathogen_name"] = pathogen_name
             profiles.append(profile)
             logger.info(

@@ -42,7 +42,7 @@ from app.repositories.hypothesis import HypothesisRepository
 from app.repositories.pathogen import PathogenRepository
 
 from .filters import is_non_pathogen
-from .llm import get_llm
+from .llm import get_llm, llm_invoke_with_retry
 
 logger = structlog.get_logger(__name__)
 
@@ -340,11 +340,12 @@ async def _synthesize_sections(llm, pathogen_name: str, ctx: dict) -> dict:
     for key, (system_prompt, user_suffix) in _SECTION_PROMPTS.items():
         user_content = f"{context_text}\n\n{user_suffix}"
         try:
-            response = await llm.ainvoke([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_content),
-            ])
-            sections[key] = response.content.strip()
+            content = await llm_invoke_with_retry(
+                llm,
+                [SystemMessage(content=system_prompt), HumanMessage(content=user_content)],
+                pathogen=pathogen_name, section=key,
+            )
+            sections[key] = content.strip()
         except Exception as exc:
             logger.warning(
                 "hypothesis_section_failed",
@@ -374,11 +375,12 @@ async def _synthesize_sections(llm, pathogen_name: str, ctx: dict) -> dict:
         f"{_RECOMMENDATION_PROMPT}"
     )
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=_RECOMMENDATION_SYSTEM),
-            HumanMessage(content=rec_context),
-        ])
-        sections["overall_recommendation"] = response.content.strip()
+        content = await llm_invoke_with_retry(
+            llm,
+            [SystemMessage(content=_RECOMMENDATION_SYSTEM), HumanMessage(content=rec_context)],
+            pathogen=pathogen_name, section="overall_recommendation",
+        )
+        sections["overall_recommendation"] = content.strip()
     except Exception as exc:
         logger.warning("hypothesis_recommendation_failed", pathogen=pathogen_name, error=str(exc))
         sections["overall_recommendation"] = f"Recommendation synthesis failed: {exc}"

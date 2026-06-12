@@ -44,7 +44,7 @@ from app.db.models.research import ArticleCategory, PathogenResearchSummary
 from app.db.session import AsyncSessionLocal
 
 from .filters import classify_article_category, is_non_pathogen
-from .llm import get_llm
+from .llm import get_llm, llm_invoke_with_retry
 
 logger = structlog.get_logger(__name__)
 
@@ -351,7 +351,9 @@ async def _run_one_pathogen(
         }
         logger.info("research_sub_agent_done", pathogen=name, agent=sub_agent.label, articles=len(articles))
 
-    total_articles = sum(len(r["articles"]) for r in sub_results.values())
+    total_articles = sum(
+        sum(1 for a in r["articles"] if a["pmid"]) for r in sub_results.values()
+    )
 
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -460,11 +462,12 @@ async def _synthesise_combined(
 
     async def _invoke() -> dict[str, str]:
         try:
-            response = await llm.ainvoke([
-                SystemMessage(content=_COMBINED_SYSTEM),
-                HumanMessage(content=user_content),
-            ])
-            return _parse_combined(response.content.strip(), pathogen_name)
+            content = await llm_invoke_with_retry(
+                llm,
+                [SystemMessage(content=_COMBINED_SYSTEM), HumanMessage(content=user_content)],
+                pathogen=pathogen_name,
+            )
+            return _parse_combined(content.strip(), pathogen_name)
         except Exception as exc:
             logger.warning("research_synthesis_failed", pathogen=pathogen_name, error=str(exc))
             return {sa.summary_field: f"Synthesis failed: {exc}" for sa in _SUB_AGENTS}

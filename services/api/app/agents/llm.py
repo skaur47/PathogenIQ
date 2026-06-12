@@ -1,6 +1,12 @@
+import asyncio
+import re
+
+import structlog
 from langchain_openai import ChatOpenAI
 
 from app.config import get_settings
+
+logger = structlog.get_logger(__name__)
 
 
 def get_llm(max_tokens: int = 2048) -> ChatOpenAI:
@@ -26,3 +32,28 @@ def get_llm(max_tokens: int = 2048) -> ChatOpenAI:
         request_timeout=300,
         max_retries=0,
     )
+
+
+def _parse_groq_retry_wait(error_str: str, default: int = 900) -> int:
+    """Parse 'try again in Xm Y.Zs' from Groq 429 error message. Default 15 min."""
+    m = re.search(r"try again in (?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?", error_str)
+    if m and (m.group(1) or m.group(2)):
+        minutes = int(m.group(1) or 0)
+        seconds = float(m.group(2) or 0)
+        return max(int(minutes * 60 + seconds) + 10, 60)
+    return default
+
+
+async def llm_invoke_with_retry(llm, messages: list, max_attempts: int = 3, **log_kwargs) -> str:
+    """Invoke LLM and retry on Groq 429 rate-limit errors. Returns response.content."""
+    for attempt in range(max_attempts):
+        try:
+            response = await llm.ainvoke(messages)
+            return response.content
+        except Exception as exc:
+            if "429" not in str(exc) or attempt >= max_attempts - 1:
+                raise
+            wait = _parse_groq_retry_wait(str(exc))
+            logger.warning("groq_rate_limit_retry", attempt=attempt + 1, wait_s=wait, **log_kwargs)
+            await asyncio.sleep(wait)
+    raise RuntimeError("unreachable")
