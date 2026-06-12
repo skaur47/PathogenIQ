@@ -295,6 +295,8 @@ def _parse_json_object(raw: str) -> dict:
     text = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
     text = re.sub(r"```\s*$", "", text.strip(), flags=re.MULTILINE)
     text = text.strip()
+    if not text:
+        return {}
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -303,7 +305,10 @@ def _parse_json_object(raw: str) -> dict:
         # with spaces — structural JSON whitespace is not required between tokens
         # so the document still parses correctly.
         sanitized = re.sub(r"[\x00-\x1f\x7f]", " ", text)
-        data = json.loads(sanitized)
+        try:
+            data = json.loads(sanitized)
+        except json.JSONDecodeError:
+            return {}
     return data if isinstance(data, dict) else {}
 
 
