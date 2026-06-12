@@ -43,11 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # return 503 and the health endpoint will report Redis as "unreachable".
     try:
         from arq import create_pool
-        from arq.connections import RedisSettings
+        from app.workers.settings import _get_redis_settings
 
-        app.state.arq_redis = await create_pool(
-            RedisSettings.from_dsn(settings.redis_url)
-        )
+        app.state.arq_redis = await create_pool(_get_redis_settings())
         logger.info("arq_pool_connected", redis_url=settings.redis_url)
     except Exception as exc:
         logger.warning("arq_pool_unavailable", error=str(exc))

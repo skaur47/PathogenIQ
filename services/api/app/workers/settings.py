@@ -112,12 +112,12 @@ async def on_shutdown(ctx: dict) -> None:
 def _get_redis_settings() -> RedisSettings:
     """Parse the REDIS_URL from settings into an ARQ RedisSettings object.
 
-    rediss:// (Upstash) needs ssl=True explicitly — from_dsn() alone is not
+    rediss:// (Redis Cloud) needs ssl=True explicitly — from_dsn() alone is not
     enough on some ARQ versions and the worker silently fails to connect.
 
-    Upstash free tier drops idle connections after ~30s. conn_retries=20 with
-    a 0.5s delay gives the worker up to 10s to re-establish the connection
-    before giving up on a job cycle.
+    conn_retries=20 / conn_retry_delay=0.5 / conn_timeout=10 give the worker
+    up to 10s per attempt (×20) to reconnect after network blips or long idle
+    periods (e.g. waiting on an LLM rate-limit backoff).
     """
     settings = get_settings()
     rs = RedisSettings.from_dsn(settings.redis_url)
@@ -125,6 +125,7 @@ def _get_redis_settings() -> RedisSettings:
         rs.ssl = True
     rs.conn_retries = 20
     rs.conn_retry_delay = 0.5
+    rs.conn_timeout = 10  # Upstash can take a few seconds on cold reconnect
     return rs
 
 
