@@ -639,6 +639,36 @@ async def trigger_send_newsletter(request: Request) -> AgentTriggerResponse:
     )
 
 
+@router.post(
+    "/trigger/run-pipeline",
+    response_model=AgentTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Run full pipeline",
+    description=(
+        "Enqueue a complete end-to-end pipeline run: collection → sentinel → scholar → "
+        "dedup → research → hypothesis → graph sync → newsletter. "
+        "Does NOT clear existing data. Watch worker logs for step-by-step progress."
+    ),
+)
+async def trigger_run_pipeline(request: Request) -> AgentTriggerResponse:
+    arq_redis = _get_arq_redis(request)
+    job = await arq_redis.enqueue_job("task_run_full_pipeline")
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to enqueue pipeline job.",
+        )
+    logger.info("full_pipeline_triggered", job_id=job.job_id)
+    return AgentTriggerResponse(
+        job_id=job.job_id,
+        agent="full_pipeline",
+        message=(
+            "Full pipeline queued. "
+            f"Poll GET /api/v1/ingestion/jobs/{job.job_id} for status."
+        ),
+    )
+
+
 # ── Hypothesis query endpoints ────────────────────────────────────────────────
 
 @router.get(
