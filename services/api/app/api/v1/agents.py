@@ -468,7 +468,7 @@ async def get_research(pathogen_name: str) -> PathogenResearchOut:
         wet_lab_summary=summary.wet_lab_summary if summary else None,
         clinical_trial_summary=summary.clinical_trial_summary if summary else None,
         vaccine_therapy_summary=summary.vaccine_therapy_summary if summary else None,
-        article_count=summary.article_count if summary else 0,
+        article_count=len(article_out),
         last_researched_at=summary.last_researched_at.isoformat() if summary and summary.last_researched_at else None,
         articles=article_out,
     )

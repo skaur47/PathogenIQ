@@ -10,7 +10,7 @@ Real-time infectious disease intelligence platform. Continuously ingests documen
 ┌─────────────────────────────────────────────────────────┐
 │  Collection  (every 4–6 h via ARQ cron)                 │
 │  CDC · WHO/PAHO · ECDC · CIDRAP/ProMED · News           │
-│  → relevance filter → date window → full-text extract   │
+│  → relevance filter → 14-day date window → full-text    │
 └─────────────────────┬───────────────────────────────────┘
                       │
                       ▼
@@ -20,17 +20,12 @@ Real-time infectious disease intelligence platform. Continuously ingests documen
                      │  auto-chains
                      ▼
              ┌────────────────┐
-             │  Deduplicator  │  consolidate mention name variants
-             └───────┬────────┘
-                     │  auto-chains
-                     ▼
-             ┌────────────────┐
              │    Scholar     │  PubMed queries → biological profiles
              └───────┬────────┘
                      │  auto-chains
                      ▼
              ┌────────────────┐
-             │  Deduplicator  │  merge duplicate pathogen records
+             │  Deduplicator  │  consolidate name variants + merge duplicate records
              └───────┬────────┘
                      │
           ┌──────────┴──────────┐
@@ -43,16 +38,16 @@ Real-time infectious disease intelligence platform. Continuously ingests documen
          │  auto-chains        │  auto-chains
          ▼                     ▼
   ┌──────────────┐    ┌──────────────────┐
-  │  Verifier   │    │    Verifier      │
-  │  (research) │    │  (hypothesis)    │
-  └─────────────┘    └─────────┬────────┘
+  │   Verifier   │    │    Verifier      │
+  │  (research)  │    │  (hypothesis)    │
+  └─────────────┘    └────────┬─────────┘
                                │
                                ▼
                       ┌────────────────┐
                       │   Graph Sync   │  PostgreSQL → Neo4j
                       └────────────────┘
 
-Full pipeline runs nightly at 02:00 UTC · Newsletter digest at 08:00 UTC
+All steps triggered manually via API — automatic cron scheduling is disabled
 ```
 
 ## Stack
@@ -61,15 +56,28 @@ Full pipeline runs nightly at 02:00 UTC · Newsletter digest at 08:00 UTC
 |---|---|
 | API | FastAPI 0.115 + uvicorn (ASGI) |
 | Database | PostgreSQL 16 · SQLAlchemy 2.0 async · asyncpg |
-| Migrations | Alembic (async, 8 applied revisions) |
+| Migrations | Alembic |
 | Knowledge Graph | Neo4j 5 (async driver) |
-| Vector DB | Qdrant 1.13 |
-| Cache / Queue | Redis 7 · ARQ (async task queue + cron) |
-| AI Agents | LangGraph 0.2 · LangChain OpenAI · Claude claude-sonnet-4-6 |
-| LLM Runtime | Ollama (local) or any OpenAI-compatible endpoint |
+| Vector DB | Qdrant |
+| Cache / Queue | Redis · ARQ (async task queue + cron) |
+| AI Agents | LangGraph · LangChain |
+| LLM | Groq (OpenAI-compatible endpoint, `llama-3.1-8b-instant`) |
 | Frontend | React 18 · Vite 5 · TypeScript · Tailwind CSS 3 |
 | Data viz | D3 v7 (knowledge graph) · TanStack Query v5 |
 | Logging | structlog (structured JSON) |
+
+## External Services
+
+| Service | Used for |
+|---|---|
+| **PostgreSQL** | Primary data store — documents, pathogens, research, hypotheses |
+| **Redis Cloud** | ARQ task queue + cron trigger store + job result cache |
+| **Neo4j Aura** | Knowledge graph — pathogen relationship nodes and edges |
+| **Qdrant Cloud** | Vector embeddings (future semantic search) |
+| **Groq API** | LLM inference for all agents (free tier: `llama-3.1-8b-instant`) |
+| **PubMed / NCBI E-utilities** | Literature queries by Scholar and Research agents |
+| **Vercel** | Frontend static hosting |
+| **SMTP** | Newsletter delivery (optional — any SMTP provider or Gmail app password) |
 
 ## Directory Structure
 
@@ -85,7 +93,7 @@ PathogenIQ/
 │   │   │   │   ├── research.py     # deep literature synthesis (4× PubMed queries)
 │   │   │   │   ├── hypothesis.py   # research gap + strategy generation
 │   │   │   │   ├── verifier.py     # output quality + coherence checks
-│   │   │   │   ├── llm.py          # LLM client (Ollama / OpenAI-compatible)
+│   │   │   │   ├── llm.py          # LLM client (OpenAI-compatible)
 │   │   │   │   ├── prompts.py      # all agent prompts
 │   │   │   │   ├── filters.py      # shared LLM output filters
 │   │   │   │   └── validators.py   # structured output validators
@@ -114,7 +122,7 @@ PathogenIQ/
 │   │   │   │   │   ├── evidence.py
 │   │   │   │   │   ├── outbreak.py
 │   │   │   │   │   └── newsletter.py
-│   │   │   │   └── migrations/versions/  # 001–008 Alembic revisions
+│   │   │   │   └── migrations/versions/  # Alembic revisions
 │   │   │   ├── graph/
 │   │   │   │   ├── neo4j_client.py # async Neo4j driver wrapper
 │   │   │   │   └── sync.py         # GraphSyncAgent (PostgreSQL → Neo4j)
@@ -130,7 +138,7 @@ PathogenIQ/
 │   │   │   └── main.py             # FastAPI app + lifespan
 │   │   └── tests/
 │   └── frontend/
-│       ├── public/logos/           # CDC, WHO, ECDC, ProMED, PubMed, bioRxiv favicons
+│       ├── public/logos/           # CDC, WHO, ECDC, ProMED, PubMed favicons
 │       └── src/
 │           ├── api/client.ts       # typed fetch wrapper for all API calls
 │           ├── components/
@@ -160,9 +168,9 @@ PathogenIQ/
 ```bash
 # 1. Configure environment
 cp .env.example .env
-# Edit .env — set LLM_API_KEY (Groq) or leave Ollama defaults
+# Edit .env — set Groq API key and connection strings for your external services
 
-# 2. Start the full stack (API, worker, Postgres, Neo4j, Qdrant, Redis, Ollama)
+# 2. Start the full stack (API, worker, Postgres, Neo4j, Qdrant, Redis)
 docker compose up
 
 # 3. Apply migrations
@@ -179,103 +187,22 @@ open http://localhost:3000
 cd services/api && pytest -v
 ```
 
-## Production Deployment (free tier)
+## Deployment
 
-The pipeline requires an always-on background worker for cron jobs. Below is the recommended free-tier stack:
+The API and background worker are deployed as two separate services on **Render**. The worker runs 24/7 and handles all ARQ cron jobs. The frontend is deployed as a static site on **Vercel**.
 
-| Service | Provider | Free tier |
-|---|---|---|
-| API + Worker (2 VMs) | [Fly.io](https://fly.io) | 3 shared VMs, 256 MB each |
-| PostgreSQL | [Neon](https://neon.tech) | 512 MB, 1 compute unit |
-| Redis | [Upstash](https://upstash.com) | 10 000 req/day |
-| Neo4j | [Neo4j Aura Free](https://neo4j.com/cloud/aura-free/) | 200 MB |
-| Vector DB | [Qdrant Cloud](https://qdrant.tech/cloud/) | 1 GB |
-| LLM | [Groq](https://console.groq.com) | 14 400 req/day |
-| Frontend | [Vercel](https://vercel.com) | Unlimited static |
+**Render setup:**
+- `api` web service — uvicorn, port 8000, `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- `worker` background worker — `arq app.workers.settings.WorkerSettings`
+- Set all connection strings and API keys as environment variables in the Render dashboard
 
-### Step 1 — Sign up for free services
-
-Create accounts at each provider above. You only need the connection strings / API keys they give you.
-
-### Step 2 — Deploy the API + worker to Fly.io
-
-```bash
-# Install the Fly CLI
-brew install flyctl   # or: curl -L https://fly.io/install.sh | sh
-
-# Log in and create the app (run from services/api/)
-cd services/api
-fly auth login
-fly launch --name pathogeniq-api --no-deploy   # creates fly.toml, skip auto-deploy
-
-# Set all secrets (replace values with your real connection strings)
-fly secrets set \
-  DATABASE_URL="postgresql+asyncpg://user:pass@host/db" \
-  REDIS_URL="rediss://default:pass@host:6379" \
-  NEO4J_URI="neo4j+s://xxxx.databases.neo4j.io" \
-  NEO4J_PASSWORD="your-neo4j-password" \
-  QDRANT_URL="https://xxxx.us-east-1-0.aws.cloud.qdrant.io" \
-  QDRANT_API_KEY="your-qdrant-key" \
-  LLM_BASE_URL="https://api.groq.com/openai/v1" \
-  LLM_MODEL="llama-3.3-70b-versatile" \
-  LLM_API_KEY="your-groq-key" \
-  CORS_ORIGINS="https://your-app.vercel.app" \
-  ENVIRONMENT="production"
-
-# Deploy — this starts both the "api" and "worker" process groups
-fly deploy
-
-# Run migrations once after first deploy
-fly ssh console -C "alembic upgrade head"
-```
-
-The `fly.toml` in `services/api/` already defines two process groups:
-- `api` — uvicorn HTTP server, bound to port 8000
-- `worker` — ARQ background worker, runs all cron jobs 24/7
-
-### Step 3 — Deploy the frontend to Vercel
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy from services/frontend/
-cd services/frontend
-vercel --prod
-
-# When Vercel asks for project settings:
-#   Framework: Vite
-#   Root: services/frontend
-#   Build command: npm run build
-#   Output dir: dist
-```
-
-After deploy, go to **Vercel → Project → Settings → Environment Variables** and add:
-
-```
-VITE_API_BASE_URL = https://pathogeniq-api.fly.dev
-```
-
-Then redeploy once (`vercel --prod`) so the frontend picks up the new variable.
-
-### Step 4 — Verify it's running
-
-```bash
-# Check API health
-curl https://pathogeniq-api.fly.dev/health
-
-# Check pipeline status
-curl https://pathogeniq-api.fly.dev/api/v1/agents/pipeline-status
-
-# Tail worker logs to confirm cron jobs fire
-fly logs --app pathogeniq-api
-```
-
-The worker will automatically collect new documents every 4-6 hours and run the full AI pipeline at 02:00 UTC every night — without your laptop needing to be on.
+**Vercel setup:**
+- Root: `services/frontend`, build command: `npm run build`, output: `dist`
+- Add `VITE_API_BASE_URL` pointing to your Render API URL
 
 ## Agents
 
-All agents run as ARQ background tasks and can be triggered manually via HTTP or automatically via the nightly pipeline cron.
+All agents run as ARQ background tasks and can be triggered manually via HTTP or automatically via the nightly pipeline.
 
 | Agent | Task | Trigger |
 |---|---|---|
@@ -295,18 +222,18 @@ Research → Verifier                        (automatic after Research)
 Hypothesis → Verifier                      (automatic after Hypothesis)
 ```
 
-The full pipeline task (`task_run_full_pipeline`) runs all steps sequentially every night at **02:00 UTC**.
+The full pipeline task (`task_run_full_pipeline`) runs all steps sequentially and is triggered manually via `POST /agents/trigger/full-pipeline`. Automatic cron scheduling is defined in `workers/settings.py` but currently disabled.
 
 ## Data Ingestion
 
 Five RSS/API sources feed documents into the pipeline throughout the day.
 
-| Source | Feed | Cron (UTC) |
+| Source | Feed | Schedule |
 |---|---|---|
-| CDC MMWR | `cdc.gov/mmwr/rss/mmwr.xml` | Every 4 h at :05 |
-| WHO/PAHO + ECDC | PAHO Americas + ECDC CDT feeds | Every 4 h at :10 |
-| CIDRAP / ProMED | `cidrap.umn.edu/rss.xml` | Every 6 h at :02 |
-| News | STAT · BBC Health · NPR Health · Outbreak News Today · ScienceDaily | Every 4 h at :15 |
+| CDC MMWR | `cdc.gov/mmwr/rss/mmwr.xml` | Manual (`POST /agents/trigger/collect-cdc`) |
+| WHO/PAHO + ECDC | PAHO Americas + ECDC CDT feeds | Manual (`POST /agents/trigger/collect-who`) |
+| CIDRAP / ProMED | `cidrap.umn.edu/rss.xml` | Manual (`POST /agents/trigger/collect-promed`) |
+| News | STAT · BBC Health · NPR Health · Outbreak News Today · ScienceDaily | Manual (`POST /agents/trigger/collect-news`) |
 
 **Filtering pipeline** applied to every incoming document:
 
@@ -315,7 +242,7 @@ Five RSS/API sources feed documents into the pipeline throughout the day.
 3. **Date window**: only articles published within the last **14 days** are ingested.
 4. **Full-text extraction**: surviving documents have their body text fetched and extracted via [trafilatura](https://trafilatura.readthedocs.io/), replacing the RSS summary.
 
-Up to **150 documents per source** per collection run. PubMed is driven on-demand by Scholar and Research (NCBI ESearch queries keyed to specific pathogen names).
+Up to **150 documents per source** per collection run. PubMed is driven on-demand by Scholar and Research agents using NCBI ESearch queries keyed to specific pathogen names.
 
 ## API Reference
 
@@ -344,7 +271,7 @@ GET  /api/v1/agents/pathogen-trends         # mention frequency over time
 GET  /api/v1/documents                      # ingested document list (source, limit, offset)
 
 # Job status
-GET  /api/v1/ingestion/jobs/{job_id}        # ARQ task result (kept 7 days)
+GET  /api/v1/ingestion/jobs/{job_id}        # ARQ task result (kept 1 hour)
 
 # Newsletter
 POST /api/v1/newsletter/subscribe           # { name, email } → 201
@@ -353,52 +280,10 @@ POST /api/v1/newsletter/unsubscribe         # { token: UUID } → 200 / 404
 
 ## Newsletter
 
-Subscribers receive a daily HTML digest of all active pathogen profiles (transmission routes, reservoir hosts, WHO priority, description). The digest is sent at **08:00 UTC** via `task_send_newsletter`.
+Subscribers receive a daily HTML digest of all active pathogen profiles (transmission routes, reservoir hosts, WHO priority, description). The digest is sent at **08:00 UTC** as step 8 of the full pipeline task.
 
 **Subscribe**: visit `/contact` in the frontend or `POST /api/v1/newsletter/subscribe`.
 
 **Unsubscribe**: each email includes a one-click link → `/contact?unsubscribe=<uuid>`.
 
-To enable email delivery, set in `.env`:
-
-```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=you@gmail.com
-SMTP_PASSWORD=<16-char Gmail app password>   # requires 2FA + App Passwords
-SMTP_FROM=PathogenIQ <noreply@yourdomain.com>
-FRONTEND_BASE_URL=https://yourdomain.com
-```
-
-When `SMTP_HOST` is empty, subscriptions are saved to the DB but no email is sent.
-
-## Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | — | PostgreSQL async DSN (`postgresql+asyncpg://...`) |
-| `REDIS_URL` | — | Redis DSN (`redis://redis:6379`) |
-| `NEO4J_URI` | — | Bolt URI (`bolt://neo4j:7687`) |
-| `NEO4J_USER` | `neo4j` | Neo4j username |
-| `NEO4J_PASSWORD` | — | Neo4j password |
-| `QDRANT_URL` | — | Qdrant HTTP URL |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key (used by Scholar, Research, Hypothesis, Verifier) |
-| `LLM_BASE_URL` | `http://ollama:11434/v1` | OpenAI-compatible LLM endpoint |
-| `LLM_MODEL` | `llama3.2` | Model name at that endpoint |
-| `LLM_API_KEY` | `ollama` | API key (`ollama` for local, real key for cloud) |
-| `SMTP_HOST` | `` | SMTP server hostname (empty = email disabled) |
-| `SMTP_PORT` | `587` | SMTP port |
-| `SMTP_USER` | `` | SMTP username |
-| `SMTP_PASSWORD` | `` | SMTP password |
-| `SMTP_FROM` | `PathogenIQ <noreply@pathogeniq.io>` | From address |
-| `FRONTEND_BASE_URL` | `http://localhost:3000` | Used in unsubscribe links |
-| `ENVIRONMENT` | `development` | `development` / `production` |
-
-## Development Status
-
-- **Phase 1** ✓ — Backend foundation: FastAPI, PostgreSQL, health checks, models, repositories
-- **Phase 2** ✓ — Data ingestion: CDC/WHO/ECDC/CIDRAP/News collectors, relevance + date filters, full-text extraction, ARQ cron scheduler
-- **Phase 3** ✓ — AI pipeline: Sentinel → Scholar → Deduplicator → Research → Hypothesis → Verifier (LangGraph + Claude claude-sonnet-4-6)
-- **Phase 4** ✓ — Knowledge graph: Neo4j sync, graph query API, D3 visualisation
-- **Phase 5** ✓ — Frontend: React 18 + Vite dashboard, pathogen cards, research/hypothesis modal, interactive graph, newsletter, trends
-- **Phase 6** — Production: CI/CD, monitoring, Kubernetes deployment
+Email delivery requires an SMTP provider configured via environment variables. When `SMTP_HOST` is not set, subscriptions are saved to the DB but no email is sent.

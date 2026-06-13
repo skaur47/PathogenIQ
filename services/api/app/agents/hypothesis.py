@@ -146,50 +146,44 @@ async def synthesize_each(state: HypothesisState) -> HypothesisState:
     For each pathogen: gather cross-table evidence, run 5 focused LLM calls,
     compute a deterministic priority score, then persist immediately.
     """
-    llm = get_llm(max_tokens=150)
+    llm = get_llm(max_tokens=400)
+    sem = asyncio.Semaphore(2)  # llama-3.1-8b-instant: 30K TPM; 2×5 calls×~300 tokens ≈ 3K/min
 
-    pathogens_processed = state["pathogens_processed"]
-    hypotheses_saved = state["hypotheses_saved"]
-    errors = list(state["errors"])
+    async def _process_one(pathogen: Pathogen) -> tuple[bool, str | None]:
+        async with sem:
+            name = pathogen.species_name
+            try:
+                context = await _build_context(pathogen)
+                sections = await _synthesize_sections(llm, name, context)
+                async with AsyncSessionLocal() as session:
+                    async with session.begin():
+                        repo = HypothesisRepository(session)
+                        await repo.upsert_hypothesis(
+                            pathogen_id=pathogen.id,
+                            research_gap=sections["research_gap"],
+                            proposed_strategy=sections["proposed_strategy"],
+                            wetlab_experiments=sections["wetlab_experiments"],
+                            clinical_approaches=sections["clinical_approaches"],
+                            rationale=sections["rationale"],
+                            overall_recommendation=sections["overall_recommendation"],
+                        )
+                logger.info("hypothesis_done", pathogen=name)
+                return True, None
+            except Exception as exc:
+                msg = f"{name}: {type(exc).__name__}: {exc}"
+                logger.warning("hypothesis_error", pathogen=name, error=str(exc))
+                return False, msg
 
-    for i, pathogen in enumerate(state["pathogens"]):
-        if i > 0:
-            await asyncio.sleep(20)  # 20s between pathogens to avoid Groq TPM rate limit
-        name = pathogen.species_name
-        log = logger.bind(pathogen=name)
-        log.info("hypothesis_start")
+    results = await asyncio.gather(*[_process_one(p) for p in state["pathogens"]])
 
-        try:
-            context = await _build_context(pathogen)
-            sections = await _synthesize_sections(llm, name, context)
-
-            async with AsyncSessionLocal() as session:
-                async with session.begin():
-                    repo = HypothesisRepository(session)
-                    await repo.upsert_hypothesis(
-                        pathogen_id=pathogen.id,
-                        research_gap=sections["research_gap"],
-                        proposed_strategy=sections["proposed_strategy"],
-                        wetlab_experiments=sections["wetlab_experiments"],
-                        clinical_approaches=sections["clinical_approaches"],
-                        rationale=sections["rationale"],
-                        overall_recommendation=sections["overall_recommendation"],
-                    )
-
-            hypotheses_saved += 1
-            pathogens_processed += 1
-            log.info("hypothesis_done")
-
-        except Exception as exc:
-            msg = f"{name}: {type(exc).__name__}: {exc}"
-            logger.warning("hypothesis_error", pathogen=name, error=str(exc))
-            errors.append(msg)
+    saved = sum(1 for ok, _ in results if ok)
+    new_errors = [e for _, e in results if e is not None]
 
     return {
         **state,
-        "pathogens_processed": pathogens_processed,
-        "hypotheses_saved": hypotheses_saved,
-        "errors": errors,
+        "pathogens_processed": state["pathogens_processed"] + saved,
+        "hypotheses_saved": state["hypotheses_saved"] + saved,
+        "errors": state["errors"] + new_errors,
     }
 
 
