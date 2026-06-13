@@ -73,6 +73,7 @@ export function HomePage() {
   const { data: status } = useQuery<PipelineStatus>({
     queryKey: ['pipeline-status'],
     queryFn: () => api.getPipelineStatus(),
+    refetchInterval: 60_000,
   })
 
   const pathogens = data?.pathogens ?? []

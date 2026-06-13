@@ -157,7 +157,7 @@ def _build_html(
         <tr>
           <td style="padding:0 0 28px;border-bottom:1px solid #1e293b;">
             <p style="margin:0 0 3px;font-size:20px;font-weight:700;color:#f1f5f9;">PathogenIQ</p>
-            <p style="margin:0;font-size:12px;color:#475569;">Daily Digest &nbsp;·&nbsp; {today}</p>
+            <p style="margin:0;font-size:12px;color:#475569;">Weekly Digest &nbsp;·&nbsp; {today}</p>
           </td>
         </tr>
 
@@ -165,7 +165,7 @@ def _build_html(
         <tr>
           <td style="padding:20px 0 16px;">
             <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
-              Hi {_esc(subscriber_name)}, here is your daily update on infectious disease intelligence.
+              Hi {_esc(subscriber_name)}, here is your weekly update on infectious disease intelligence.
               PathogenIQ is tracking
               <strong style="color:#f1f5f9;">{count} pathogen{"s" if count != 1 else ""}</strong>
               across all sources. Each entry includes recent surveillance reports and a research highlight.
@@ -207,7 +207,7 @@ def _build_html(
 def _build_plain(subscriber_name: str, pathogens: list[dict], unsubscribe_url: str) -> str:
     today = date.today().strftime("%B %d, %Y")
     lines = [
-        f"PathogenIQ Daily Digest — {today}",
+        f"PathogenIQ Weekly Digest — {today}",
         f"Hi {subscriber_name},",
         "",
         f"PathogenIQ is tracking {len(pathogens)} pathogen(s) across all sources.",
@@ -288,7 +288,7 @@ async def send_digest_to(
         f"?unsubscribe={subscriber.unsubscribe_token}"
     )
     today   = date.today().strftime("%B %d, %Y")
-    subject = f"PathogenIQ Daily Digest — {today}"
+    subject = f"PathogenIQ Weekly Digest — {today}"
 
     html  = _build_html(subscriber.name, pathogens, unsubscribe_url)
     plain = _build_plain(subscriber.name, pathogens, unsubscribe_url)

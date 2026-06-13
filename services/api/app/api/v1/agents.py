@@ -402,12 +402,19 @@ async def list_research(limit: int = 100, offset: int = 0) -> ResearchIndexRespo
         summaries = await res_repo.get_all_summaries(limit=limit, offset=offset)
         total = len(summaries)
 
+        # Count actual DB rows per pathogen (not the stale denormalized summary.article_count)
+        counts_result = await session.execute(
+            select(ResearchArticle.pathogen_id, func.count(ResearchArticle.id).label("cnt"))
+            .group_by(ResearchArticle.pathogen_id)
+        )
+        counts_map: dict = {row.pathogen_id: row.cnt for row in counts_result}
+
         items = []
         for s in summaries:
             pathogen = await path_repo.get_by_id(s.pathogen_id)
             items.append(ResearchIndexItem(
                 pathogen_name=pathogen.species_name if pathogen else str(s.pathogen_id),
-                article_count=s.article_count,
+                article_count=counts_map.get(s.pathogen_id, 0),
                 last_researched_at=s.last_researched_at.isoformat() if s.last_researched_at else None,
                 has_overall_summary=bool(s.overall_summary),
             ))

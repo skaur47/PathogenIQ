@@ -62,7 +62,7 @@ export function ContactPage() {
               <CheckCircle className="w-12 h-12 text-accent" />
               <h2 className="text-lg font-semibold text-white">Unsubscribed</h2>
               <p className="text-slate-400 text-sm">
-                You have been removed from the daily digest. You can re-subscribe any time.
+                You have been removed from the weekly digest. You can re-subscribe any time.
               </p>
               <button
                 onClick={() => setUnsubToken(null)}
@@ -81,9 +81,9 @@ export function ContactPage() {
             <div className="flex flex-col items-center gap-6 py-16">
               <Mail className="w-12 h-12 text-slate-500" />
               <div>
-                <h2 className="text-lg font-semibold text-white mb-2">Unsubscribe from daily digest?</h2>
+                <h2 className="text-lg font-semibold text-white mb-2">Unsubscribe from weekly digest?</h2>
                 <p className="text-slate-400 text-sm">
-                  You will no longer receive the PathogenIQ daily pathogen update.
+                  You will no longer receive the PathogenIQ weekly pathogen update.
                 </p>
               </div>
               <button
@@ -115,9 +115,9 @@ export function ContactPage() {
     <div className="min-h-screen pt-24 pb-16 px-6">
       <div className="mx-auto max-w-md">
         <div className="mb-10">
-          <h1 className="text-3xl font-bold text-white mb-2">Daily Digest</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Weekly Digest</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Get a daily email summary of pathogens currently tracked by PathogenIQ. Unsubscribe at any time from the email.
+            Get a weekly email summary of pathogens currently tracked by PathogenIQ. Unsubscribe at any time from the email.
           </p>
         </div>
 
@@ -126,7 +126,7 @@ export function ContactPage() {
             <CheckCircle className="w-12 h-12 text-accent" />
             <h2 className="text-lg font-semibold text-white">You're subscribed</h2>
             <p className="text-slate-400 text-sm">
-              Your first digest will arrive tomorrow morning. Check your spam folder if you don't see it.
+              Your first digest will arrive with the next weekly send. Check your spam folder if you don't see it.
             </p>
             <button
               onClick={() => { setSubscribed(false); setName(''); setEmail('') }}
@@ -174,11 +174,11 @@ export function ContactPage() {
                          transition-colors disabled:opacity-60"
             >
               <Mail className="w-4 h-4" />
-              {loading ? 'Subscribing…' : 'Subscribe to daily digest'}
+              {loading ? 'Subscribing…' : 'Subscribe to weekly digest'}
             </button>
 
             <p className="text-xs text-slate-600 text-center">
-              Sent every morning. Unsubscribe at any time.
+              Sent every week. Unsubscribe at any time.
             </p>
           </form>
         )}

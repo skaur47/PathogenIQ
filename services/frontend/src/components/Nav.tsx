@@ -9,7 +9,7 @@ const links = [
   { to: '/graph', label: 'Knowledge Graph' },
   { to: '/trends', label: 'Pathogen Trends' },
   { to: '/about', label: 'About' },
-  { to: '/contact', label: 'Contact' },
+  { to: '/contact', label: 'Subscribe' },
 ]
 
 function PathogenLogo() {
