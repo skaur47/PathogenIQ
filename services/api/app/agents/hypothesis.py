@@ -59,67 +59,23 @@ class HypothesisState(TypedDict):
     errors: list[str]
 
 
-# ── Focused LLM system prompts ────────────────────────────────────────────────
+# ── Combined LLM system prompt ────────────────────────────────────────────────
+# Single call per pathogen (5 separate calls × N pathogens exhausted RPD limits).
+# All five sections returned in one response, parsed by _parse_combined_response.
 
-_GAP_SYSTEM = (
-    "You are a senior biomedical research strategist advising a global health surveillance team. "
-    "Given a pathogen's biological profile and current research landscape, identify the single most "
-    "critical gap in current research — the missing knowledge that most limits our ability to treat, "
-    "prevent, or control this pathogen. "
-    "Write 3-5 sentences. State precisely what is known, what is absent, and why this gap is "
-    "consequential for public health. Base your analysis only on the evidence provided. "
-    "If the landscape is sparse, say what category of research is entirely missing. "
-    "Plain text only, no headers, no markdown."
-)
-
-_STRATEGY_SYSTEM = (
-    "You are a senior biomedical research strategist. Given a pathogen's biological profile and "
-    "current research landscape, propose one specific therapeutic or preventive strategy AND "
-    "explain the biological and epidemiological rationale for why this approach is sound. "
-    "Be mechanistically precise: name the biological target (protein, receptor, pathway), "
-    "the intervention type (e.g., mRNA vaccine, monoclonal antibody, small-molecule inhibitor, "
-    "attenuated live vaccine, repurposed antiviral), and explain what properties of this pathogen "
-    "make this approach feasible given the available evidence. "
-    "Write 4-6 sentences covering both the strategy and the reasoning behind it. "
-    "Do not invent data — only reason from what is provided. "
-    "If evidence is insufficient to propose a specific strategy, state what additional data "
-    "would first be needed. Plain text only, no headers, no markdown."
-)
-
-_WETLAB_SYSTEM = (
-    "You are a senior experimental virologist and microbiologist. Given a pathogen's profile and "
-    "proposed strategy, specify the next wet-lab experiments required to advance that strategy. "
-    "Provide exactly 3-5 numbered experiments. Each must include: "
-    "(a) the experimental model — name the specific cell line (e.g., Vero E6, HEK293T, A549) "
-    "or animal model (e.g., BALB/c mice, Syrian hamster, ferret); "
-    "(b) the assay type (e.g., plaque reduction assay, ELISA, flow cytometry, Western blot, "
-    "RNA-seq, challenge model); "
-    "(c) the specific hypothesis or endpoint being tested. "
-    "Base recommendations only on the provided evidence. Number each experiment (1., 2., etc.). "
-    "Plain text only, no markdown."
-)
-
-_CLINICAL_SYSTEM = (
-    "You are a senior clinical infectious disease specialist and field epidemiologist. "
-    "Given a pathogen's profile and current outbreak signal, propose feasible clinical and "
-    "epidemiological approaches to control the outbreak. "
-    "Provide exactly 3-5 numbered approaches. Each should specify: "
-    "whether it is a clinical intervention (drug trial, vaccine deployment, prophylaxis protocol) "
-    "or epidemiological measure (surveillance enhancement, contact tracing, vector control, "
-    "quarantine protocol); the target population; and the expected outcome or endpoint. "
-    "If Phase I/II trial evidence exists, reference it. If none does, specify what preclinical "
-    "threshold must be met first. "
-    "Number each approach (1., 2., etc.). Plain text only, no markdown."
-)
-
-_RECOMMENDATION_SYSTEM = (
-    "You are a senior biosurveillance analyst writing a briefing for public health decision-makers. "
-    "Given a pathogen's research gap, proposed strategy, wet-lab experiments, and clinical approaches, "
-    "synthesize a concise strategic recommendation. "
-    "Write 3-4 sentences covering: (1) the core opportunity — what makes this moment the right time "
-    "to act; (2) the single most impactful first action; (3) why this pathogen warrants prioritization "
-    "given its current outbreak signal and research gaps relative to its threat level. "
-    "Ground every claim in the provided evidence. Plain text only, no markdown."
+_COMBINED_SYSTEM = (
+    "You are a senior biomedical research strategist writing a structured briefing. "
+    "Given a pathogen's biological profile and research landscape, produce exactly five labeled sections. "
+    "Use these exact labels on their own line, followed immediately by the content:\n\n"
+    "RESEARCH_GAP: 2 sentences identifying the most critical knowledge gap.\n"
+    "PROPOSED_STRATEGY: 2 sentences proposing one specific therapeutic or preventive approach with its biological rationale.\n"
+    "WETLAB_EXPERIMENTS:\n1. One complete sentence per experiment (cell line or animal model, assay type, endpoint).\n2. ...\n3. ...\n"
+    "CLINICAL_APPROACHES:\n1. One complete sentence per approach (intervention type, target population, expected outcome).\n2. ...\n3. ...\n"
+    "OVERALL_RECOMMENDATION: 2 sentences on the single most impactful first action and why this pathogen warrants prioritization.\n\n"
+    "Rules: Every sentence must end with a period. "
+    "Every numbered item must be a single complete sentence ending with a period — never a fragment, never trailing punctuation like a comma. "
+    "Be concise and specific. Base all claims only on the provided evidence. "
+    "Plain text only, no markdown, no extra headers."
 )
 
 
@@ -146,8 +102,8 @@ async def synthesize_each(state: HypothesisState) -> HypothesisState:
     For each pathogen: gather cross-table evidence, run 5 focused LLM calls,
     compute a deterministic priority score, then persist immediately.
     """
-    llm = get_llm(max_tokens=400)
-    sem = asyncio.Semaphore(2)  # llama-3.1-8b-instant: 30K TPM; 2×5 calls×~300 tokens ≈ 3K/min
+    llm = get_llm(max_tokens=700)
+    sem = asyncio.Semaphore(1)  # 1 combined call per pathogen; serialise to stay within RPD limits
 
     async def _process_one(pathogen: Pathogen) -> tuple[bool, str | None]:
         async with sem:
@@ -315,70 +271,57 @@ def _format_context(pathogen: Pathogen, ctx: dict) -> str:
 
 # ── LLM synthesis ─────────────────────────────────────────────────────────────
 
-_SECTION_PROMPTS = {
-    "research_gap": (_GAP_SYSTEM, "Based on the above evidence, identify the critical research gap for this pathogen."),
-    "proposed_strategy": (_STRATEGY_SYSTEM, "Propose a specific therapeutic or preventive strategy for this pathogen."),
-    "wetlab_experiments": (_WETLAB_SYSTEM, "Specify the next wet-lab experiments to advance the strategy against this pathogen."),
-    "clinical_approaches": (_CLINICAL_SYSTEM, "Propose feasible clinical and epidemiological approaches to control this pathogen's outbreak."),
-}
+_SECTION_LABELS = [
+    ("RESEARCH_GAP:", "research_gap"),
+    ("PROPOSED_STRATEGY:", "proposed_strategy"),
+    ("WETLAB_EXPERIMENTS:", "wetlab_experiments"),
+    ("CLINICAL_APPROACHES:", "clinical_approaches"),
+    ("OVERALL_RECOMMENDATION:", "overall_recommendation"),
+]
 
-_RECOMMENDATION_PROMPT = "Synthesize a strategic recommendation for prioritizing research and intervention against this pathogen."
+
+def _parse_combined_response(text: str) -> dict:
+    """Extract each labeled section from the combined LLM response."""
+    sections: dict[str, str] = {}
+    labels = [label for label, _ in _SECTION_LABELS]
+    keys = [key for _, key in _SECTION_LABELS]
+
+    for i, (label, key) in enumerate(zip(labels, keys)):
+        start = text.find(label)
+        if start == -1:
+            sections[key] = ""
+            continue
+        start += len(label)
+        end = len(text)
+        for next_label in labels[i + 1 :]:
+            pos = text.find(next_label, start)
+            if pos != -1 and pos < end:
+                end = pos
+        sections[key] = text[start:end].strip()
+
+    return sections
 
 
 async def _synthesize_sections(llm, pathogen_name: str, ctx: dict) -> dict:
     pathogen = ctx["pathogen"]
     context_text = _format_context(pathogen, ctx)
-    sections: dict[str, str] = {}
-
-    # Run gap / strategy / wetlab / clinical sequentially (each builds on prior)
-    for key, (system_prompt, user_suffix) in _SECTION_PROMPTS.items():
-        user_content = f"{context_text}\n\n{user_suffix}"
-        try:
-            content = await llm_invoke_with_retry(
-                llm,
-                [SystemMessage(content=system_prompt), HumanMessage(content=user_content)],
-                pathogen=pathogen_name, section=key,
-            )
-            sections[key] = content.strip()
-        except Exception as exc:
-            logger.warning(
-                "hypothesis_section_failed",
-                pathogen=pathogen_name,
-                section=key,
-                error=str(exc),
-            )
-            sections[key] = f"Synthesis failed for this section: {exc}"
-        await asyncio.sleep(0.3)
-
-    # Rationale is embedded in the strategy response — no separate LLM call needed.
-    sections["rationale"] = sections.get("proposed_strategy", "")
-
-    await asyncio.sleep(0.3)
-
-    # Overall recommendation — synthesizes all prior sections.
-    # Truncate each section to 300 chars to keep the combined prompt small for CPU inference.
-    def _trunc(s: str, n: int = 300) -> str:
-        return s[:n] + "…" if len(s) > n else s
-
-    rec_context = (
+    user_content = (
         f"{context_text}\n\n"
-        f"RESEARCH GAP: {_trunc(sections.get('research_gap', ''))}\n\n"
-        f"PROPOSED STRATEGY: {_trunc(sections.get('proposed_strategy', ''))}\n\n"
-        f"KEY WET-LAB STEPS: {_trunc(sections.get('wetlab_experiments', ''))}\n\n"
-        f"KEY CLINICAL STEPS: {_trunc(sections.get('clinical_approaches', ''))}\n\n"
-        f"{_RECOMMENDATION_PROMPT}"
+        "Produce all five labeled sections for this pathogen following the format in your instructions."
     )
     try:
         content = await llm_invoke_with_retry(
             llm,
-            [SystemMessage(content=_RECOMMENDATION_SYSTEM), HumanMessage(content=rec_context)],
-            pathogen=pathogen_name, section="overall_recommendation",
+            [SystemMessage(content=_COMBINED_SYSTEM), HumanMessage(content=user_content)],
+            pathogen=pathogen_name, section="all_sections",
         )
-        sections["overall_recommendation"] = content.strip()
+        sections = _parse_combined_response(content.strip())
     except Exception as exc:
-        logger.warning("hypothesis_recommendation_failed", pathogen=pathogen_name, error=str(exc))
-        sections["overall_recommendation"] = f"Recommendation synthesis failed: {exc}"
+        logger.warning("hypothesis_synthesis_failed", pathogen=pathogen_name, error=str(exc))
+        msg = f"Synthesis failed: {exc}"
+        sections = {key: msg for _, key in _SECTION_LABELS}
 
+    sections["rationale"] = sections.get("proposed_strategy", "")
     return sections
 
 

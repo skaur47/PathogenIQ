@@ -676,16 +676,53 @@ class PipelineRunningResponse(BaseModel):
     job_id: str | None = None
 
 
+_PIPELINE_RUNNING_KEY = "pathogeniq:pipeline:running"
+_PIPELINE_JOB_KEY = "pathogeniq:pipeline:latest_job_id"
+
+
+@router.post(
+    "/pipeline/start",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Mark pipeline as running (called by run_pipeline.sh at start)",
+)
+async def pipeline_start(request: Request) -> None:
+    arq_redis = getattr(request.app.state, "arq_redis", None)
+    if arq_redis is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Redis unavailable.")
+    await arq_redis.set(_PIPELINE_RUNNING_KEY, "1", ex=28800)  # 8 h safety TTL
+    logger.info("pipeline_started_flag_set")
+
+
+@router.post(
+    "/pipeline/stop",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Mark pipeline as stopped (called by run_pipeline.sh on finish or error)",
+)
+async def pipeline_stop(request: Request) -> None:
+    arq_redis = getattr(request.app.state, "arq_redis", None)
+    if arq_redis is None:
+        return
+    await arq_redis.delete(_PIPELINE_RUNNING_KEY)
+    logger.info("pipeline_stopped_flag_cleared")
+
+
 @router.get(
     "/pipeline-running",
     response_model=PipelineRunningResponse,
-    summary="Check if the full pipeline is currently running",
+    summary="Check if the pipeline is currently running",
 )
 async def get_pipeline_running(request: Request) -> PipelineRunningResponse:
     arq_redis = getattr(request.app.state, "arq_redis", None)
     if arq_redis is None:
         return PipelineRunningResponse(running=False)
-    raw = await arq_redis.get("pathogeniq:pipeline:latest_job_id")
+
+    # Check script-driven flag first (set by run_pipeline.sh via /pipeline/start)
+    flag = await arq_redis.get(_PIPELINE_RUNNING_KEY)
+    if flag:
+        return PipelineRunningResponse(running=True)
+
+    # Fall back: check ARQ job status for pipelines triggered via API
+    raw = await arq_redis.get(_PIPELINE_JOB_KEY)
     if not raw:
         return PipelineRunningResponse(running=False)
     job_id = raw.decode() if isinstance(raw, bytes) else raw

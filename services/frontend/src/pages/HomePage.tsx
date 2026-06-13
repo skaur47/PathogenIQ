@@ -117,7 +117,7 @@ export function HomePage() {
 
           {pipelineRunning && (
             <p className="mt-3 text-sm italic text-accent/80">
-              Currently running pipeline for pathogens... Stay tuned!
+              Currently running the PathogenIQ pipeline... Stay tuned!
             </p>
           )}
         </div>

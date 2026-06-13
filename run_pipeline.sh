@@ -99,11 +99,20 @@ run_step() {
 
 # ── Main ─────────────────────────────────────────────────────────────────────────
 START=$(date +%s)
+
+# Signal the frontend banner — always clear on exit, even on error or Ctrl-C
+pipeline_stop() {
+  curl -sf -X POST "${API}/agents/pipeline/stop" >/dev/null 2>&1 || true
+}
+trap pipeline_stop EXIT
+
 echo ""
 echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BOLD}${BLUE}  PathogenIQ Pipeline — $(date '+%Y-%m-%d %H:%M')${NC}"
 echo -e "${BLUE}  API: ${API}${NC}"
 echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+curl -sf -X POST "${API}/agents/pipeline/start" >/dev/null 2>&1 || warn "Could not set pipeline running flag (banner will not show)"
 
 # ── 1. Ingest all sources ────────────────────────────────────────────────────────
 step "1/9  Data ingestion (CDC + WHO + ProMED + News)"
